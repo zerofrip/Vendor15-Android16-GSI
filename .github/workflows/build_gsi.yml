@@ -1,0 +1,66 @@
+name: Build Android 16 GSI
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run on the 7th of every month at 00:00 UTC (Shortly after Google Security Bulletin)
+    - cron: '0 0 7 * *'
+
+jobs:
+  build:
+    runs-on: self-hosted # REQUIRED: AOSP needs 300GB+ disk space.
+    timeout-minutes: 1440 # 24 hours (increased for initial sync)
+    
+    steps:
+    - name: Cleanup Workspace (Pre-build)
+      run: |
+        echo "Cleaning up previous build artifacts..."
+        rm -rf out/
+        # We generally keep .repo for faster sync, but ensure no stale state
+        
+    - name: Checkout Builder Repo
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set permissions
+      run: |
+        chmod +x build.sh
+        chmod +x scripts/apply_patches.sh
+
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
+
+    - name: Install Repo
+      run: |
+        mkdir -p ~/bin
+        if [ ! -f "$HOME/bin/repo" ]; then
+            curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+            chmod a+x ~/bin/repo
+        fi
+        echo "$HOME/bin" >> $GITHUB_PATH
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "GSI Builder"
+        git config --global user.email "gsi-builder@localhost"
+        git config --global color.ui false
+
+    - name: Build GSI
+      run: ./build.sh
+
+    - name: Upload System Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: system-image
+        path: out/target/product/**/system.img
+        retention-days: 5
+        
+    - name: Cleanup Workspace (Post-build)
+      if: always() # Run even if build fails
+      run: |
+        echo "Cleaning up build output to save disk space..."
+        # Optional: remove checks out to save space, but keep .repo for next time
+        rm -rf out/

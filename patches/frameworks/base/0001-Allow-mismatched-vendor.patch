@@ -1,0 +1,19 @@
+From: GSI Builder <gsi@example.com>
+Date: Mon, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] Allow mismatched vendor
+
+This patch disables the strict check for vendor interface matching, allowing
+the Android 16 GSI to boot on devices with older vendor implementations (e.g., Android 15).
+
+diff --git a/core/jni/android_os_VintfObject.cpp b/core/jni/android_os_VintfObject.cpp
+index 1234567..89abcde 100644
+--- a/core/jni/android_os_VintfObject.cpp
++++ b/core/jni/android_os_VintfObject.cpp
+@@ -100,7 +100,7 @@ static jint android_os_VintfObject_verify(JNIEnv* env, jclass, jobjectArray pack
+     std::vector<std::string> cStrings;
+     // GSI Patch: Always return 0 (success) for VINTF verification
+-    return VintfObject::CheckCompatibility(cStrings, &error);
++    return 0;
+ }
+ 
+ static jint android_os_VintfObject_getHalNamesAndVersions(JNIEnv* env, jclass, jobjectArray packageInfo) {

@@ -1,0 +1,9 @@
+[submodule "zerofrip/device_phh_treble"]
+	path = trebledroid/device_phh_treble
+	url = https://github.com/zerofrip/device_phh_treble.git
+[submodule "zerofrip/vendor_hardware_overlay"]
+	path = trebledroid/vendor_hardware_overlay
+	url = https://github.com/zerofrip/vendor_hardware_overlay.git
+[submodule "zerofrip/treble_app"]
+	path = trebledroid/treble_app
+	url = https://github.com/zerofrip/treble_app.git

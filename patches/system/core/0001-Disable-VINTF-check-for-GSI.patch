@@ -1,0 +1,21 @@
+From: GSI Builder <gsi@example.com>
+Date: Mon, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] Disable VINTF init checks
+
+This patch modifies the init process to bypass VINTF checks during boot.
+
+diff --git a/init/init.cpp b/init/init.cpp
+index 9876543..210fedc 100644
+--- a/init/init.cpp
++++ b/init/init.cpp
+@@ -700,8 +700,8 @@ int SecondStageMain(int argc, char** argv) {
+     // GSI Patch: Comment out VINTF check or make it non-fatal
+-    if (false) { // was if (!IsVintfCompatible())
++    // if (!IsVintfCompatible()) {
+-        LOG(FATAL) << "Vintf check failed";
++    //    LOG(ERROR) << "Vintf check failed, but proceeding for GSI compatibility";
+-    }
++    // }
+ 
+     return 0;
+ }
