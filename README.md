@@ -20,8 +20,8 @@ android16_gsi_builder/
 │   ├── vendor_hardware_overlay/
 │   └── treble_app/
 ├── patches/            # Patches to apply to AOSP source tree
-│   ├── frameworks_base/
-│   └── system_core/
+│   ├── frameworks/base/
+│   └── system/libvintf/
 ├── scripts/            # Helper scripts
 │   └── apply_patches.sh
 ├── build.sh            # Main build script
@@ -82,6 +82,6 @@ If you have access to the **Android 15 source code** for your device, you can im
 ## Patches
 
 The `patches/` directory contains modifications to AOSP sources to allow Android 16 system to boot with Android 15 vendor blobs.
-- **VINTF Checks**: Disabled to allow mismatched vendor versions.
-- **Init**: Adjusted to support older vendor init scripts if necessary.
+- **VINTF Checks (`system/libvintf`)**: Globally disabled by forcing `checkCompatibility` to always return `COMPATIBLE`. This ensures `init`, `system_server`, and other components don't fail due to vendor mismatches.
+- **Legacy Support (`frameworks/base`)**: Adjustments to allow booting even if specific vendor requirements aren't met.
 
