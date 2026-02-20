@@ -1,42 +1,41 @@
-// Blueprint for the VNDK compatibility tools and Soong plugin
+// Blueprint for the future-proof VNDK compatibility framework
 
 bootstrap_go_package {
-    name: "soong-vndk-compat",
+    name: "soong-vndk-compat-engine",
     pkgPath: "android/soong/vndk/compat",
     deps: [
         "soong-android",
         "soong-cc",
     ],
     srcs: [
-        "vndk_compat_generator.go",
+        "vndk_compat_engine.go",
     ],
     pluginFor: ["soong_build"],
 }
 
-// Global generator that analyzes the vendor partition
-vndk_compat_generator {
-    name: "vndk_compat_analysis",
+// The core engine module
+vndk_compat_engine {
+    name: "vndk_compat_core",
+    vendor_api_level: 15,
+    system_api_level: 16,
+    policy_dir: "policies",
 }
 
-// Example of a specifically defined shim for a known problematic library
-vndk_compat_shim {
-    name: "libvndksupport_shim",
-    target_lib: "libvndksupport",
-    compat_version: "35",
-    symbols: [
-        "android_load_sphal_library",
-        "android_unload_sphal_library",
-        "android_get_exported_namespace",
-    ],
+// Host tools for the engine logic
+python_binary_host {
+    name: "vndk_compat_engine_bin",
+    main: "vndk_compat_engine.py",
+    srcs: ["vndk_compat_engine.py"],
 }
 
-// Ensure the Python scripts are available as tools
-sh_binary_host {
-    name: "analyze_dependencies",
-    src: "analyze_dependencies.py",
+python_binary_host {
+    name: "linker_config_ast_bin",
+    main: "linker_config_ast.py",
+    srcs: ["linker_config_ast.py"],
 }
 
-sh_binary_host {
-    name: "shim_generator",
-    src: "shim_generator.py",
+python_binary_host {
+    name: "shim_generator_bin",
+    main: "shim_generator.py",
+    srcs: ["shim_generator.py"],
 }

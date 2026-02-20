@@ -2,14 +2,21 @@
 import os
 import sys
 import argparse
+import json
 
 SHIM_TEMPLATE = """
 #include <dlfcn.h>
 #include <log/log.h>
 #include <string>
 
-// Shim for {target_lib}
-// Version: {version}
+// Global handle for the real library
+static void* get_real_lib_handle(const char* lib_name) {{
+    static void* handle = nullptr;
+    if (!handle) {{
+        handle = dlopen(lib_name, RTLD_NOW);
+    }}
+    return handle;
+}}
 
 extern "C" {{
 
@@ -18,62 +25,79 @@ extern "C" {{
 }}
 """
 
-SYMBOL_TEMPLATE = """
-typedef void* (*{func_name}_ptr)({arg_types});
-
-void* {func_name}({args}) {{
-    static {func_name}_ptr real_func = nullptr;
+FORWARD_TEMPLATE = """
+void* {name}(...) {{
+    typedef void* (*func_ptr)(...);
+    static func_ptr real_func = nullptr;
     if (!real_func) {{
-        void* handle = dlopen("{target_lib_path}", RTLD_NOW);
+        void* handle = get_real_lib_handle("{target_lib_path}");
         if (handle) {{
-            real_func = ({func_name}_ptr)dlsym(handle, "{func_name}");
+            real_func = (func_ptr)dlsym(handle, "{name}");
         }}
     }}
-
-    if (real_func) {{
-        return real_func({arg_names});
-    }}
-
-    ALOGE("vndk_compat: failed to find {func_name} in {target_lib_path}");
+    if (real_func) return real_func();
+    ALOGE("vndk_compat: {name} not found");
     return nullptr;
 }}
 """
 
-def generate_shim(target_lib, symbols, output_path, version="35"):
-    """Generates a C++ shim for a library."""
-    symbol_defs = []
-    for sym in symbols:
-        # Note: In a real implementation, we would use a tool like 'header-abi-diff'
-        # or parse headers to get exact signatures. For this reference, we use
-        # generic pointers or simplified signatures.
-        symbol_defs.append(SYMBOL_TEMPLATE.format(
-            func_name=sym,
-            arg_types="...",
-            args="...",
-            arg_names="...", # This is a placeholder; real ABI forwarding is more complex
-            target_lib_path=target_lib + ".so"
-        ))
+REMAP_TEMPLATE = """
+extern void* {new_name}(...);
+void* {old_name}(...) {{
+    return {new_name}();
+}}
+"""
+
+STUB_TEMPLATE = """
+void* {name}(...) {{
+    ALOGW("vndk_compat: stub called for {name}");
+    return nullptr;
+}}
+"""
+
+def generate_shim(plan_path, output_path):
+    with open(plan_path, 'r') as f:
+        plan = json.load(f)
+
+    symbol_definitions = []
+    actions = plan.get('actions', [])
     
+    # Group actions by target lib to use correct dlopen target if needed
+    for action in actions:
+        action_type = action['type']
+        name = action['symbol']
+        target_lib = action['target_lib'] + ".so"
+
+        if action_type == "shim":
+            if action.get('remap'):
+                symbol_definitions.append(REMAP_TEMPLATE.format(
+                    old_name=name,
+                    new_name=action['remap']
+                ))
+            else:
+                symbol_definitions.append(FORWARD_TEMPLATE.format(
+                    name=name,
+                    target_lib_path=target_lib
+                ))
+        elif action_type == "stub":
+            symbol_definitions.append(STUB_TEMPLATE.format(name=name))
+
     content = SHIM_TEMPLATE.format(
-        target_lib=target_lib,
-        version=version,
-        symbol_definitions="\n".join(symbol_defs)
+        target_lib="compat_layer",
+        version=plan.get('vendor_api_level', 'unknown'),
+        symbol_definitions="\n".join(symbol_definitions)
     )
     
     with open(output_path, 'w') as f:
         f.write(content)
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate C++ shims for VNDK compatibility.')
-    parser.add_argument('--lib', required=True, help='Target library name (e.g., libvndksupport)')
-    parser.add_argument('--symbols', required=True, help='Comma-separated list of symbols')
+    parser = argparse.ArgumentParser(description='Version-Agnostic Shim Generator')
+    parser.add_argument('--plan', required=True, help='Path to compat_plan.json')
     parser.add_argument('--output', required=True, help='Output C++ file path')
-    parser.add_argument('--version', default='35', help='VNDK version')
     
     args = parser.parse_args()
-    symbols = args.symbols.split(',')
-    
-    generate_shim(args.lib, symbols, args.output, args.version)
+    generate_shim(args.plan, args.output)
 
 if __name__ == '__main__':
     main()

@@ -1,0 +1,61 @@
+{
+  "api_level": 15,
+  "description": "Compatibility policy for Android 15 vendors on Android 16+ systems",
+  "rules": [
+    {
+      "action": "shim",
+      "target": "libutils",
+      "symbols": ["_ZN7android5Fence4waitEi"],
+      "comment": "ABI break in Fence::wait"
+    },
+    {
+      "action": "stub",
+      "target": "libui",
+      "symbols": ["_ZN7android11BufferQueue13createLibraryEv"],
+      "comment": "Internal BufferQueue call removed in A16"
+    },
+    {
+      "action": "shim",
+      "target": "libvndksupport",
+      "symbols": ["android_load_sphal_library"],
+      "remap": {
+        "android_load_sphal_library": "android_load_sphal_library_v2"
+      }
+    }
+  ],
+  "linker_config": {
+    "namespaces": [
+      {
+        "name": "vndk",
+        "patch": {
+          "links": [
+            {
+              "add": {
+                "target": "vndk_compat_v15",
+                "allow_all_shared_libs": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "vndk_compat_v15",
+        "add": {
+          "name": "vndk_compat_v15",
+          "isolated": true,
+          "visible": true,
+          "links": [
+            {
+              "target": "default",
+              "allow_all_shared_libs": true
+            }
+          ],
+          "permitted_paths": [
+            "/system/lib64/vndk-v35",
+            "/system/lib/vndk-v35"
+          ]
+        }
+      }
+    ]
+  }
+}
