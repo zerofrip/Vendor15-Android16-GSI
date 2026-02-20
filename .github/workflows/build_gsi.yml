@@ -49,7 +49,20 @@ jobs:
         git config --global color.ui false
 
     - name: Build GSI
+      env:
+        TARGET_ENABLE_VNDK_COMPAT: true
+        TARGET_VENDOR_API_LEVEL: 15
+        TARGET_SYSTEM_API_LEVEL: 16
       run: ./build.sh
+
+    - name: Upload Compatibility Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: vndk-compatibility-reports
+        path: |
+          out/target/product/**/vndk_compat_plan.json
+          out/target/product/**/vndk_compat.prop
+        retention-days: 14
 
     - name: Upload System Image
       uses: actions/upload-artifact@v4
