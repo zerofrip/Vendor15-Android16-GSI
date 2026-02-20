@@ -1,0 +1,43 @@
+{
+    "api_level": 17,
+    "description": "Future-proof policy for Android 17 vendors",
+    "rules": [
+        {
+            "action": "shim",
+            "target": "libfuture_hal",
+            "symbols": [
+                "calculate_next_gen_metrics"
+            ],
+            "comment": "Anticipated ABI break in A17"
+        },
+        {
+            "action": "stub",
+            "target": "liblegacy_hw",
+            "symbols": [
+                "init_v1_interface"
+            ],
+            "comment": "Deprecated interface in A17 system"
+        }
+    ],
+    "linker_config": {
+        "namespaces": [
+            {
+                "name": "vndk_compat_v17",
+                "add": {
+                    "name": "vndk_compat_v17",
+                    "isolated": true,
+                    "visible": true,
+                    "links": [
+                        {
+                            "target": "default",
+                            "allow_all_shared_libs": true
+                        }
+                    ],
+                    "permitted_paths": [
+                        "/system/lib64/vndk-v37"
+                    ]
+                }
+            }
+        ]
+    }
+}

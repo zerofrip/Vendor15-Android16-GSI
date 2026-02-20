@@ -1,7 +1,7 @@
-// Blueprint for the future-proof VNDK compatibility framework
+// Blueprint for the advanced, future-proof VNDK compatibility framework
 
 bootstrap_go_package {
-    name: "soong-vndk-compat-engine",
+    name: "soong-vndk-compat-advanced",
     pkgPath: "android/soong/vndk/compat",
     deps: [
         "soong-android",
@@ -13,29 +13,37 @@ bootstrap_go_package {
     pluginFor: ["soong_build"],
 }
 
-// The core engine module
+// The advanced engine module configuration
 vndk_compat_engine {
-    name: "vndk_compat_core",
+    name: "vndk_compat_engine_core",
     vendor_api_level: 15,
     system_api_level: 16,
     policy_dir: "policies",
+    system_scan_dir: "system", // To be refined in actual build
+    vendor_scan_dir: "vendor",
 }
 
-// Host tools for the engine logic
+// Host tools for the advanced logic
 python_binary_host {
-    name: "vndk_compat_engine_bin",
-    main: "vndk_compat_engine.py",
-    srcs: ["vndk_compat_engine.py"],
-}
-
-python_binary_host {
-    name: "linker_config_ast_bin",
-    main: "linker_config_ast.py",
-    srcs: ["linker_config_ast.py"],
+    name: "vndk_api_model_bin",
+    main: "vndk_api_model.py",
+    srcs: ["vndk_api_model.py"],
 }
 
 python_binary_host {
-    name: "shim_generator_bin",
-    main: "shim_generator.py",
-    srcs: ["shim_generator.py"],
+    name: "vndk_diff_engine_bin",
+    main: "vndk_diff_engine.py",
+    srcs: ["vndk_diff_engine.py"],
+}
+
+python_binary_host {
+    name: "scoring_system_bin",
+    main: "scoring_system.py",
+    srcs: ["scoring_system.py"],
+}
+
+python_binary_host {
+    name: "linker_ir_bin",
+    main: "linker_ir.py",
+    srcs: ["linker_ir.py"],
 }
