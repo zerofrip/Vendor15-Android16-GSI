@@ -13,19 +13,27 @@ It is designed to be automated via **GitHub Actions**, allowing for monthly buil
 ## Project Structure
 
 ```
-android16_gsi_builder/
-├── .github/workflows/  # GitHub Actions CI/CD configuration
-├── trebledroid/        # TrebleDroid Submodules
-│   ├── device_phh_treble/
-│   ├── vendor_hardware_overlay/
-│   └── treble_app/
-├── patches/            # Patches to apply to AOSP source tree
-│   ├── frameworks/base/
-│   └── system/libvintf/
+Vendor15-Android16-GSI/
+├── README.md           # This file
+├── build.sh            # Main build script with VNDK compat flags
+├── .github/            # GitHub Actions CI/CD configuration
+├── build/
+│   └── make/
+│       ├── core/
+│       │   └── vndk_compat.mk  # Build system integration
+│       └── tools/
+│           └── vndk_compat/     # Advanced Compatibility Engine
+│               ├── policies/     # Compat policies (v15, v17)
+│               ├── vndk_compat_engine.py
+│               ├── scoring_system.py
+│               └── ...
+├── patches/            # Mandatory patches to AOSP source tree
+│   ├── build/make/     # Framework integration patches
+│   ├── frameworks/base/# Legacy HAL support patches
+│   └── system/core/    # VINTF bypass and init patches
 ├── scripts/            # Helper scripts
 │   └── apply_patches.sh
-├── build.sh            # Main build script
-└── README.md           # This file
+└── trebledroid/        # TrebleDroid Submodules (Device/Hardware/App)
 ```
 
 ## Features
