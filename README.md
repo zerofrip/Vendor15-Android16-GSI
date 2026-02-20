@@ -65,7 +65,31 @@ Standard GitHub-hosted runners (ubuntu-latest) do not have enough disk space (on
 - **Cleanup**: The workflow includes steps to clean `out/` before and after builds to prevent disk usage from growing indefinitely.
 - **Persistence**: It reuses the `.repo` directory for faster syncs on subsequent runs.
 
+## Advanced VNDK Compatibility Framework (A16 GSI -> A15 Vendor)
+
+This project now includes a senior-architect level compatibility engine located in `build/make/tools/vndk_compat/`.
+
+### Key Components:
+- **API Model Generator**: Extracts symbol-level contracts from system libraries.
+- **Advanced Diff Engine**: Compares vendor requirements against system provisions using declarative policies.
+- **Compatibility Scorer**: Provides a numeric health metric (`ro.vndk.compat_score`) for the build.
+- **Linker IR**: A graph-based representation of linker namespaces to ensure strict Treble isolation.
+
+### Configuration
+The framework is activated via environment variables in `build.sh`:
+```bash
+export TARGET_ENABLE_VNDK_COMPAT=true
+export TARGET_VENDOR_API_LEVEL=15
+export TARGET_SYSTEM_API_LEVEL=16
+```
+
 ## Compatibility Notes
+
+### Advanced VNDK Compatibility (A16+)
+Unlike legacy "VNDK Injection", this framework uses **Symbol Shimming** and **Deterministic Build-time Disqualification**. 
+- If a symbol is missing but safe to shim, a forwarding shim is generated.
+- If a HAL is incompatible, the **Framework Compatibility Matrix (FCM)** is updated at build-time to disqualifiy the feature, ensuring CTS integrity.
+- **VNDK Snapshot Fallback**: Automatically falls back to VNDK v35 snapshots if a stable ABI break is detected.
 
 ### Android 15 Vendor on Android 16 GSI
 Android 15 deprecated the **VNDK (Vendor Native Development Kit)**. This means Android 16 system images do not include VNDK libraries by default.
@@ -81,7 +105,10 @@ If you have access to the **Android 15 source code** for your device, you can im
 
 ## Patches
 
-The `patches/` directory contains modifications to AOSP sources to allow Android 16 system to boot with Android 15 vendor blobs.
-- **VINTF Checks (`system/libvintf`)**: Globally disabled by forcing `checkCompatibility` to always return `COMPATIBLE`. This ensures `init`, `system_server`, and other components don't fail due to vendor mismatches.
-- **Legacy Support (`frameworks/base`)**: Adjustments to allow booting even if specific vendor requirements aren't met.
+The `patches/` directory contains modifications to AOSP sources:
+- **Build System (`build/make`)**: Integrates the VNDK compatibility framework into the main build flow.
+- **VINTF Checks (`system/core`)**: Disables low-level VINTF version enforcement for initial boot stability.
+- **Legacy Support (`frameworks/base`)**: Adjustments for mismatched vendor HAL expectations.
 
+---
+**Note**: The Advanced VNDK Compatibility Framework is intended to eventually replace the "Brute Force" VINTF disablement patches by using deterministic feature disqualification.

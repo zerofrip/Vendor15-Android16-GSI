@@ -1,0 +1,22 @@
+From: Antigravity <antigravity@google.com>
+Date: Fri, 20 Feb 2026 19:55:00 +0900
+Subject: [PATCH] build: core: Integrate VNDK compatibility framework
+
+This patch adds the inclusion of vndk_compat.mk into main.mk,
+enabling the automated generation of shims, linker configs,
+and compatibility scores.
+
+diff --git a/core/main.mk b/core/main.mk
+index 1234567..89abcdef 100644
+--- a/core/main.mk
++++ b/core/main.mk
+@@ -100,6 +100,9 @@ include $(BUILD_SYSTEM)/config.mk
+ include $(BUILD_SYSTEM)/cleanbuild.mk
+ include $(BUILD_SYSTEM)/dlkm.mk
+ 
++# Advanced VNDK Compatibility Framework
++include $(BUILD_SYSTEM)/vndk_compat.mk
++
+ # -----------------------------------------------------------------
+ # Define rules for current system.
+ # -----------------------------------------------------------------

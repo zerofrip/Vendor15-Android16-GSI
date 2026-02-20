@@ -10,6 +10,14 @@ SCRIPTS_DIR="$WORK_DIR/scripts"
 echo "=== Android 16 GSI Builder ==="
 echo "Work Directory: $WORK_DIR"
 
+# VNDK Compatibility Framework Configuration
+export TARGET_ENABLE_VNDK_COMPAT=true
+export TARGET_VENDOR_API_LEVEL=15
+export TARGET_SYSTEM_API_LEVEL=16
+export TARGET_VENDOR_PATH="$WORK_DIR/vendor" # Adjust as needed for analysis
+
+echo "VNDK Compat: Enabled (v$TARGET_VENDOR_API_LEVEL -> v$TARGET_SYSTEM_API_LEVEL)"
+
 # 1. Initialize Repo
 if [ ! -d ".repo" ]; then
     echo "Initializing repo for $ANDROID_VERSION..."
