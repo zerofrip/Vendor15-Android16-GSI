@@ -1,0 +1,42 @@
+// Blueprint for the VNDK compatibility tools and Soong plugin
+
+bootstrap_go_package {
+    name: "soong-vndk-compat",
+    pkgPath: "android/soong/vndk/compat",
+    deps: [
+        "soong-android",
+        "soong-cc",
+    ],
+    srcs: [
+        "vndk_compat_generator.go",
+    ],
+    pluginFor: ["soong_build"],
+}
+
+// Global generator that analyzes the vendor partition
+vndk_compat_generator {
+    name: "vndk_compat_analysis",
+}
+
+// Example of a specifically defined shim for a known problematic library
+vndk_compat_shim {
+    name: "libvndksupport_shim",
+    target_lib: "libvndksupport",
+    compat_version: "35",
+    symbols: [
+        "android_load_sphal_library",
+        "android_unload_sphal_library",
+        "android_get_exported_namespace",
+    ],
+}
+
+// Ensure the Python scripts are available as tools
+sh_binary_host {
+    name: "analyze_dependencies",
+    src: "analyze_dependencies.py",
+}
+
+sh_binary_host {
+    name: "shim_generator",
+    src: "shim_generator.py",
+}
