@@ -1,0 +1,126 @@
+# ============================================================
+# gsi_survival.rc
+# Vendor15 Compatibility Lifetime Extension — Init Configuration
+# ============================================================
+#
+# This init script enforces the upgrade-only boot model and
+# coordinates safe cache sanitation during GSI version upgrades.
+#
+# Flow:
+#   1. post-fs-data: run gsi_survival_check.sh (SDK comparison)
+#   2. Script sets sys.gsi.boot_decision property
+#   3. Init reacts:
+#      - "downgrade"  → halt boot, log fatal, reboot to recovery
+#      - "upgrade"    → continue boot (caches already wiped by script)
+#      - "normal"     → continue boot
+#      - "first_boot" → continue boot
+#
+# Files installed to system image:
+#   /system/etc/init/gsi_survival.rc          (this file)
+#   /system/bin/gsi_survival_check.sh         (SDK gate script)
+#
+# Properties used:
+#   persist.sys.prev_sdk       — high-water-mark of last booted SDK
+#   persist.sys.gsi_upgrade    — "1" during the single upgrade boot
+#   sys.gsi.boot_decision      — set by script, consumed by triggers
+# ============================================================
+
+# -------------------------------------------------------
+# Service: gsi_survival_gate
+# Runs the upgrade/downgrade check as early as possible
+# after /data is mounted (post-fs-data).
+# -------------------------------------------------------
+service gsi_survival_gate /system/bin/sh /system/bin/gsi_survival_check.sh
+    class core
+    user root
+    group root system
+    # Run once per boot, do not restart
+    oneshot
+    # Needs /data for persist properties and cache paths
+    # post-fs-data trigger starts this explicitly
+    disabled
+    # SELinux: runs as init's own domain (or create a dedicated one)
+    seclabel u:r:su:s0
+
+# -------------------------------------------------------
+# Trigger: post-fs-data
+# Start the boot gate after /data is available
+# -------------------------------------------------------
+on post-fs-data
+    # Start the gate check — it will set sys.gsi.boot_decision
+    start gsi_survival_gate
+
+# -------------------------------------------------------
+# Trigger: DOWNGRADE DETECTED — halt boot
+# -------------------------------------------------------
+on property:sys.gsi.boot_decision=downgrade
+    # Log extensively so it's visible in last_kmsg / pstore
+    write /dev/kmsg "GSI_SURVIVAL: =========================================="
+    write /dev/kmsg "GSI_SURVIVAL: FATAL: DOWNGRADE DETECTED"
+    write /dev/kmsg "GSI_SURVIVAL: Boot has been halted to protect userdata."
+    write /dev/kmsg "GSI_SURVIVAL: Flash SDK >= persist.sys.prev_sdk or wipe data."
+    write /dev/kmsg "GSI_SURVIVAL: =========================================="
+
+    # Stop all service classes to prevent partial boot
+    class_stop main
+    class_stop late_start
+    class_stop hal
+
+    # Give logs a moment to flush
+    exec -- /system/bin/sleep 2
+
+    # Reboot into recovery so the user can take action
+    # If recovery is unavailable, this will power off instead
+    setprop sys.powerctl reboot,recovery
+
+# -------------------------------------------------------
+# Trigger: UPGRADE DETECTED — one-shot post-processing
+# -------------------------------------------------------
+on property:sys.gsi.boot_decision=upgrade
+    write /dev/kmsg "GSI_SURVIVAL: Upgrade boot in progress. Caches cleared."
+    write /dev/kmsg "GSI_SURVIVAL: persist.sys.gsi_upgrade=1 for this boot."
+
+# -------------------------------------------------------
+# Trigger: NORMAL BOOT
+# -------------------------------------------------------
+on property:sys.gsi.boot_decision=normal
+    write /dev/kmsg "GSI_SURVIVAL: Normal boot. No version change detected."
+
+# -------------------------------------------------------
+# Trigger: FIRST BOOT
+# -------------------------------------------------------
+on property:sys.gsi.boot_decision=first_boot
+    write /dev/kmsg "GSI_SURVIVAL: First boot detected. SDK baseline recorded."
+
+# -------------------------------------------------------
+# Trigger: boot_completed — finalize one-shot upgrade flag
+# Clears persist.sys.gsi_upgrade so next boot is "normal"
+# -------------------------------------------------------
+on property:sys.boot_completed=1
+    # If this was an upgrade boot, clear the one-shot flag now that
+    # boot completed successfully
+    exec -- /system/bin/sh -c "\
+        if [ \"$(getprop persist.sys.gsi_upgrade)\" = \"1\" ]; then \
+            setprop persist.sys.gsi_upgrade 0; \
+            log -t GSI_SURVIVAL -p i 'Upgrade boot completed. Cleared persist.sys.gsi_upgrade.'; \
+            echo 'GSI_SURVIVAL: Upgrade finalized. Next boot will be normal.' > /dev/kmsg; \
+        fi"
+
+    # Always log survival mode status on completed boot
+    write /dev/kmsg "GSI_SURVIVAL: === Boot Complete ==="
+
+# -------------------------------------------------------
+# VINTF / compatibility bypass properties
+# These are set early to prevent VINTF enforcement from
+# killing init before the gate script even runs.
+# -------------------------------------------------------
+on early-init
+    # Suppress VINTF fatal checks in init second stage
+    setprop ro.vintf.enforce false
+
+    # Rescue Party will factory-reset after repeated crashes —
+    # in survival mode we cannot allow that
+    setprop persist.sys.disable_rescue true
+
+    # Log that survival mode is active
+    write /dev/kmsg "GSI_SURVIVAL: Survival mode active (early-init)"

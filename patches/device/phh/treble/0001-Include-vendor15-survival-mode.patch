@@ -1,0 +1,19 @@
+From: GSI Builder <gsi@example.com>
+Date: Thu, 27 Feb 2026 19:00:00 +0900
+Subject: [PATCH] base: Include Vendor15 survival mode integration
+
+This patch adds the inclusion of vendor15_survival.mk into the
+TrebleDroid base makefile, enabling the frozen compatibility matrix,
+survival init script, and upgrade-only enforcement for all GSI builds.
+
+diff --git a/base.mk b/base.mk
+index 1234567..89abcdef 100644
+--- a/base.mk
++++ b/base.mk
+@@ -260,3 +260,6 @@ PRODUCT_PRODUCT_PROPERTIES += \
+     persist.settings.large_screen_opt.enabled=true
+ 
+ PRODUCT_EXTRA_VNDK_VERSIONS += 28 29
++
++# Vendor15 Compatibility Lifetime Extension (unconditional)
++include device/phh/treble/vendor15/vendor15_survival.mk

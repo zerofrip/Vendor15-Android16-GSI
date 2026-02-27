@@ -61,6 +61,41 @@ else
     echo "Warning: device/phh/treble/generate.sh not found!"
 fi
 
+# ============================================================
+# 3. Stage Vendor15 Survival Mode Files
+# ============================================================
+# These files are unconditionally installed into the AOSP tree
+# so that the survival design cannot be accidentally skipped.
+# They must be staged BEFORE patches are applied, because the
+# base.mk patch references device/phh/treble/vendor15/.
+# ============================================================
+echo "=== Staging Vendor15 Survival Mode Files ==="
+SURVIVAL_DIR="device/phh/treble/vendor15"
+mkdir -p "$SURVIVAL_DIR"
+
+# Frozen compatibility matrix (FCM level 202404)
+cp -v "$WORK_DIR/compatibility_matrix_vendor15_frozen.xml" \
+      "$SURVIVAL_DIR/compatibility_matrix_vendor15_frozen.xml"
+
+# Init script (auto-discovered by init from /system/etc/init/)
+cp -v "$WORK_DIR/gsi_survival.rc" \
+      "$SURVIVAL_DIR/gsi_survival.rc"
+
+# Boot gate shell script (upgrade/downgrade detection + cache wipe)
+cp -v "$WORK_DIR/gsi_survival_check.sh" \
+      "$SURVIVAL_DIR/gsi_survival_check.sh"
+chmod 755 "$SURVIVAL_DIR/gsi_survival_check.sh"
+
+# Build integration makefile
+cp -v "$WORK_DIR/vendor15_survival.mk" \
+      "$SURVIVAL_DIR/vendor15_survival.mk"
+
+echo "Survival files staged to $SURVIVAL_DIR"
+echo ""
+
+# ============================================================
+# 4. Apply Patches (including survival base.mk injection)
+# ============================================================
 echo "Applying patches..."
 if [ -f "$SCRIPTS_DIR/apply_patches.sh" ]; then
     bash "$SCRIPTS_DIR/apply_patches.sh" "$WORK_DIR" "$PATCHES_DIR"
