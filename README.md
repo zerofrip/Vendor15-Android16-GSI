@@ -2,8 +2,6 @@
 
 This project provides a set of scripts and patches to build an **Android 16 Generic System Image (GSI)** capable of running on devices with **Android 15 Vendor** implementations.
 
-It is designed to be automated via **GitHub Actions**, allowing for monthly builds aligned with Google's security updates.
-
 ## Prerequisites
 
 - **Disk Space**: Building AOSP requires 300GB+ of free space.
