@@ -2,22 +2,35 @@ name: Build Android 16 GSI
 
 on:
   workflow_dispatch:
+    inputs:
+      ccache_size:
+        description: 'ccache size (e.g. 50G, 100G)'
+        required: false
+        default: '50G'
+      lunch_target:
+        description: 'Lunch target (e.g. treble_arm64_bvN-userdebug)'
+        required: false
+        default: 'treble_arm64_bvN-userdebug'
   schedule:
-    # Run on the 7th of every month at 00:00 UTC (Shortly after Google Security Bulletin)
+    # Run on the 7th of every month at 00:00 UTC (Google Security Bulletin)
     - cron: '0 0 7 * *'
+
+env:
+  ANDROID_VERSION: android-16.0.0_r1
+  ANDROID_MAJOR_VERSION: '16'
+  LUNCH_TARGET: ${{ github.event.inputs.lunch_target || 'treble_arm64_bvN-userdebug' }}
 
 jobs:
   build:
-    runs-on: self-hosted # REQUIRED: AOSP needs 300GB+ disk space.
-    timeout-minutes: 1440 # 24 hours (increased for initial sync)
-    
+    runs-on: self-hosted
+    timeout-minutes: 1440  # 24 hours
+
     steps:
     - name: Cleanup Workspace (Pre-build)
       run: |
         echo "Cleaning up previous build artifacts..."
         rm -rf out/
-        # We generally keep .repo for faster sync, but ensure no stale state
-        
+
     - name: Checkout Builder Repo
       uses: actions/checkout@v4
       with:
@@ -27,11 +40,29 @@ jobs:
       run: |
         chmod +x build.sh
         chmod +x scripts/apply_patches.sh
+        chmod +x gsi_survival_check.sh
 
     - name: Install Build Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 libncurses5 lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
+        sudo apt-get install -y \
+          git-core gnupg flex bison build-essential zip curl \
+          zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
+          libncurses5 lib32ncurses5-dev x11proto-core-dev \
+          libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils \
+          xsltproc unzip fontconfig ccache
+
+    # ============================================================
+    # ccache: Restore from GitHub Actions cache
+    # ============================================================
+    - name: Restore ccache
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.ccache
+        key: ccache-${{ env.ANDROID_MAJOR_VERSION }}-${{ env.LUNCH_TARGET }}-${{ github.sha }}
+        restore-keys: |
+          ccache-${{ env.ANDROID_MAJOR_VERSION }}-${{ env.LUNCH_TARGET }}-
+          ccache-${{ env.ANDROID_MAJOR_VERSION }}-
 
     - name: Install Repo
       run: |
@@ -50,10 +81,23 @@ jobs:
 
     - name: Build GSI
       env:
-        TARGET_ENABLE_VNDK_COMPAT: true
-        TARGET_VENDOR_API_LEVEL: 15
-        TARGET_SYSTEM_API_LEVEL: 16
+        TARGET_ENABLE_VNDK_COMPAT: 'true'
+        TARGET_VENDOR_API_LEVEL: '15'
+        TARGET_SYSTEM_API_LEVEL: '16'
+        CCACHE_SIZE: ${{ github.event.inputs.ccache_size || '50G' }}
+        CCACHE_DIR: ~/.ccache
+        LUNCH_TARGET: ${{ env.LUNCH_TARGET }}
       run: ./build.sh
+
+    # ============================================================
+    # ccache: Save to GitHub Actions cache
+    # ============================================================
+    - name: Save ccache
+      uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: ~/.ccache
+        key: ccache-${{ env.ANDROID_MAJOR_VERSION }}-${{ env.LUNCH_TARGET }}-${{ github.sha }}
 
     - name: Upload Compatibility Artifacts
       uses: actions/upload-artifact@v4
@@ -70,10 +114,9 @@ jobs:
         name: system-image
         path: out/target/product/**/system.img
         retention-days: 5
-        
+
     - name: Cleanup Workspace (Post-build)
-      if: always() # Run even if build fails
+      if: always()
       run: |
         echo "Cleaning up build output to save disk space..."
-        # Optional: remove checks out to save space, but keep .repo for next time
         rm -rf out/
