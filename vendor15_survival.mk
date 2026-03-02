@@ -42,14 +42,6 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.sys.disable_rescue=true
 
 # -----------------------------------------------------------
-# 4. GSI Compatibility AIDL Service (system-side only)
-#    Stable versioned interface for compatibility reporting.
-#    NOT a HAL — no VINTF entry. Starts after boot_completed.
-# -----------------------------------------------------------
-PRODUCT_PACKAGES += \
-    gsi_compat_service
-
-# -----------------------------------------------------------
-# 5. Disable VINTF enforcement at build level
+# 4. Disable VINTF enforcement at build level
 # -----------------------------------------------------------
 PRODUCT_ENFORCE_VINTF_MANIFEST := false

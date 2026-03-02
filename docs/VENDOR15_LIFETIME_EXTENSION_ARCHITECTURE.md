@@ -83,7 +83,7 @@ To survive, the GSI must violate these normally inviolable Android assumptions:
 
 **Gralloc / Allocator:**
 - A17 FCM requires `android.hardware.graphics.allocator` AIDL v1-2
-- Vendor15 *may* provide v1 (first shipped in A13 AIDL migration). If vendor still uses HIDL `IAllocator@4.0`, it is **completely invisible** to the A17 framework
+- Vendor15 *may* provide v1 (first shipped in A13 AIDL migration). Vendors still on HIDL `IAllocator@4.0` are **not supported** (AIDL-only policy)
 - **Fatal if missing**: `SurfaceFlinger` cannot allocate graphic buffers → black screen → bootloop appearance
 
 **Mapper:**
@@ -93,7 +93,7 @@ To survive, the GSI must violate these normally inviolable Android assumptions:
 
 **Hardware Composer (HWC):**
 - A17 FCM requires `android.hardware.graphics.composer3` AIDL v4
-- Vendor15 likely provides composer3 v3 (or even HIDL `IComposer@2.4`)
+- Vendor15 likely provides composer3 AIDL v3. Vendors still on HIDL `IComposer@2.4` are **not supported** (AIDL-only policy)
 - SurfaceFlinger's `HWComposer` wrapper calls version-specific methods. New methods on v4 that don't exist in v3 cause `UNKNOWN_TRANSACTION` binder errors → SurfaceFlinger treats these as fatal
 
 **Survival strategy**: SurfaceFlinger must be patched to:
@@ -128,14 +128,13 @@ To survive, the GSI must violate these normally inviolable Android assumptions:
 ### 2.4 Camera Provider (Non-Fatal with Caveats)
 
 - A17 FCM requires `android.hardware.camera.provider` AIDL v1-3
-- Vendor15 provides v1 (or HIDL `ICameraProvider@2.6-7`)
+- Vendor15 provides AIDL v1. Vendors still on HIDL `ICameraProvider@2.6-7` are **not supported** (AIDL-only policy)
 - The `CameraService` (native daemon, not system_server) handles version negotiation reasonably well for basic capture
 - **New features**: Ultra HDR, night mode extensions, etc. will crash if the framework blindly calls new AIDL methods
 
 **Survival strategy**:
 - Camera will work at baseline functionality
 - Disable new camera features via `config_camera_features.xml` overlays
-- If vendor is still on HIDL camera: patch `CameraProviderManager` to maintain the HIDL→AIDL shim path (A16 already has this; A17+ may remove it)
 
 ### 2.5 Input / Audio (Mixed Severity)
 
@@ -148,7 +147,7 @@ To survive, the GSI must violate these normally inviolable Android assumptions:
 
 **Input:**
 - `android.hardware.input.processor` is optional
-- HIDL `IInputClassifier@1.0` was dropped — if vendor only has HIDL, input classification is lost (no impact on basic touch/keyboard)
+- HIDL `IInputClassifier@1.0` was dropped in the AIDL migration — vendors must provide the AIDL version or input classification is absent (no impact on basic touch/keyboard)
 
 **Survival strategy**: Audio should work for basic playback/recording. Disable spatial audio features.
 
@@ -164,7 +163,7 @@ The following are **hard failure points** where the framework intentionally cras
 | `vold` | Abort on KeyMint version check | KeyMint v1 when v3+ expected for new encryption modes |
 | `system_server` | Crash in `PackageManagerService` | `ro.build.version.sdk` vs. `ro.product.first_api_level` conflict |
 | `system_server` | Fatal in `DisplayManagerService` | Missing display HAL capabilities |
-| `gatekeeperd` | Fatal if gatekeeper HAL missing | HIDL→AIDL migration not found |
+| `gatekeeperd` | Fatal if gatekeeper HAL missing | AIDL gatekeeper HAL not found |
 | `wifi` service | Crash on supplicant version mismatch | v3 when v4+ expected (new methods) |
 
 ---
@@ -358,7 +357,7 @@ Or patched in `RescueParty.java` to never escalate past level 1.
 5. PowerManagerService degraded mode — **must create**
 6. WiFi supplicant version tolerance — **must create**
 
-**Prognosis**: Achievable. The A16→A17 delta is incremental. Most HALs bump by one version. The HIDL→AIDL migration is already done for Vendor15, which is the biggest cliff.
+**Prognosis**: Achievable. The A16→A17 delta is incremental. Most HALs bump by one AIDL version. This design assumes AIDL-only vendors — HIDL-only vendors are explicitly excluded from the support matrix.
 
 ### 4.2 Vendor15 + Android 18 (Viability: **EXPERIMENTAL**)
 
