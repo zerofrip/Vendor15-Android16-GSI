@@ -17,7 +17,7 @@ matrix — all designed to maximize boot reliability across diverse vendors.
 ## Project Structure
 
 ```
-Vendor15-Android16-GSI/
+Vendor15-GSI/
 ├── build.sh                            # Main build script
 ├── compatibility_matrix_vendor15_frozen.xml  # Frozen FCM (all HALs optional, AIDL-only)
 ├── gsi_survival.rc                     # Init script: upgrade-only boot gate
