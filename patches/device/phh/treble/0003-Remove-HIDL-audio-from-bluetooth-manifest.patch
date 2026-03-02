@@ -1,0 +1,35 @@
+From: GSI Builder <gsi@example.com>
+Date: Sun, 2 Mar 2026 19:45:00 +0900
+Subject: [PATCH] Remove HIDL audio HAL entries from bluetooth audio manifest
+
+The bluetooth_audio_system.xml declared HIDL android.hardware.audio
+@2.0 through @7.1 via hwbinder transport. On AIDL-only Vendor15
+targets, these cause false service registrations and unnecessary
+hwservicemanager probes that can stall boot.
+
+Retains the AIDL bluetooth.audio v4 entry which is the correct
+transport for A15+ vendors.
+
+diff --git a/bluetooth/audio/hal/bluetooth_audio_system.xml b/bluetooth/audio/hal/bluetooth_audio_system.xml
+index 1234567..89abcde 100644
+--- a/bluetooth/audio/hal/bluetooth_audio_system.xml
++++ b/bluetooth/audio/hal/bluetooth_audio_system.xml
+@@ -1,17 +1,8 @@
+ <manifest version="1.0" type="framework">
+     <hal format="aidl">
+         <name>android.hardware.bluetooth.audio</name>
+         <version>4</version>
+         <fqname>IBluetoothAudioProviderFactory/sysbta</fqname>
+     </hal>
+-    <hal>
+-        <name>android.hardware.audio</name>
+-        <transport>hwbinder</transport>
+-        <fqname>@2.0::IDevicesFactory/sysbta</fqname>
+-        <fqname>@4.0::IDevicesFactory/sysbta</fqname>
+-        <fqname>@5.0::IDevicesFactory/sysbta</fqname>
+-        <fqname>@6.0::IDevicesFactory/sysbta</fqname>
+-        <fqname>@7.0::IDevicesFactory/sysbta</fqname>
+-        <fqname>@7.1::IDevicesFactory/sysbta</fqname>
+-    </hal>
++    <!-- HIDL audio HAL entries removed: AIDL-only policy (Vendor15 GSI) -->
+ </manifest>

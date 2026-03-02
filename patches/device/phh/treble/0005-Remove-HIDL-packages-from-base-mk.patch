@@ -1,0 +1,43 @@
+From: GSI Builder <gsi@example.com>
+Date: Sun, 2 Mar 2026 19:45:00 +0900
+Subject: [PATCH] Remove HIDL packages and compat services from base.mk
+
+Removes:
+  - android.hidl.manager-V1.0-java from PRODUCT_PACKAGES
+    (loaded by Zygote into every app process — wastes memory)
+  - vendor-specific HIDL Java packages (Huawei, Qualcomm, Xiaomi)
+    (no longer registered in interfaces.xml)
+  - HIDL fingerprint compat services for Oppo/Oplus
+    (requires hwbinder transport, incompatible with AIDL-only policy)
+  - interfaces.xml PRODUCT_COPY_FILES entry
+    (the emptied interfaces.xml is still copied to avoid build errors)
+
+diff --git a/base.mk b/base.mk
+index 1234567..89abcde 100644
+--- a/base.mk
++++ b/base.mk
+@@ -96,16 +96,6 @@ PRODUCT_PACKAGES += \
+     fsck.exfat
+ endif
+ 
+-PRODUCT_PACKAGES += \
+-    android.hidl.manager-V1.0-java \
+-    vendor.huawei.hardware.biometrics.fingerprint-V2.1-java \
+-    vendor.huawei.hardware.tp-V1.0-java \
+-    vendor.qti.hardware.radio.am-V1.0-java \
+-    vendor.qti.qcril.am-V1.0-java \
+-    vendor.xiaomi.hardware.displayfeature-V1.0-java
+-
+ PRODUCT_COPY_FILES += \
+     device/phh/treble/interfaces.xml:system/etc/permissions/interfaces.xml
+ 
+@@ -196,9 +186,6 @@ PRODUCT_COPY_FILES += \
+     device/phh/treble/remote/phh-remotectl.rc:system/etc/init/phh-remotectl.rc \
+     device/phh/treble/remote/phh-remotectl.sh:system/bin/phh-remotectl.sh \
+ 
+-PRODUCT_PACKAGES += \
+-    android.hardware.biometrics.fingerprint@2.1-service.oppo.compat \
+-    android.hardware.biometrics.fingerprint@2.1-service.oplus.compat \
+ 
+ PRODUCT_PACKAGES += \
+     vr_hwc \

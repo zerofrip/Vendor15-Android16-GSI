@@ -1,0 +1,30 @@
+From: GSI Builder <gsi@example.com>
+Date: Sun, 2 Mar 2026 19:45:00 +0900
+Subject: [PATCH] Remove HIDL fingerprint HAL from framework manifest
+
+The framework_manifest.xml declared a HIDL biometrics.fingerprint v2.1
+service via hwbinder transport. On AIDL-only Vendor15 targets,
+hwservicemanager may not be running, causing SELinux denials
+and stalled service lookups during boot.
+
+Replace with an empty manifest to satisfy the build system
+without declaring any HIDL services.
+
+diff --git a/framework_manifest.xml b/framework_manifest.xml
+index 1234567..89abcde 100644
+--- a/framework_manifest.xml
++++ b/framework_manifest.xml
+@@ -1,12 +1,4 @@
+ <manifest version="1.0" type="framework">
+-    <!-- For our Oppo/Realme friends -->
+-    <hal>
+-        <name>android.hardware.biometrics.fingerprint</name>
+-        <transport>hwbinder</transport>
+-        <version>2.1</version>
+-        <interface>
+-            <name>IBiometricsFingerprint</name>
+-            <instance>default</instance>
+-        </interface>
+-    </hal>
++    <!-- HIDL fingerprint HAL removed: AIDL-only policy (Vendor15 GSI) -->
+ </manifest>

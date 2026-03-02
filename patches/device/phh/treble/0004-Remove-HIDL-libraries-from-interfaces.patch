@@ -1,0 +1,33 @@
+From: GSI Builder <gsi@example.com>
+Date: Sun, 2 Mar 2026 19:45:00 +0900
+Subject: [PATCH] Remove HIDL library registrations from interfaces.xml
+
+The interfaces.xml registered android.hidl.manager.V1_0 and several
+vendor-specific HIDL Java libraries (Qualcomm, Huawei, Xiaomi) into
+the system classloader. On A16+ GSI with AIDL-only policy, these
+libraries are never used, add classloader overhead, and their JAR
+files may not be present in the system image.
+
+Replace with an empty permissions file.
+
+diff --git a/interfaces.xml b/interfaces.xml
+index 1234567..89abcde 100644
+--- a/interfaces.xml
++++ b/interfaces.xml
+@@ -1,15 +1,4 @@
+ <?xml version="1.0" encoding="utf-8"?>
++<!-- HIDL library registrations removed: AIDL-only policy (Vendor15 GSI) -->
+ <permissions>
+-	<library name="android.hidl.manager.V1_0"
+-		file="/system/framework/android.hidl.manager-V1.0-java.jar" />
+-	<library name="vendor.qti.qcril.am.V1_0"
+-		file="/system/framework/vendor.qti.qcril.am-V1.0-java.jar" />
+-	<library name="vendor.qti.hardware.radio.am.V1_0"
+-		file="/system/framework/vendor.qti.hardware.radio.am-V1.0-java.jar" />
+-	<library name="vendor.huawei.hardware.biometrics.fingerprint.V2_1"
+-		file="/system/framework/vendor.huawei.hardware.biometrics.fingerprint-V2.1-java.jar" />
+-	<library name="vendor.huawei.hardware.tp.V1_0"
+-		file="/system/framework/vendor.huawei.hardware.tp-V1.0-java.jar" />
+-	<library name="vendor.xiaomi.hardware.displayfeature.V1_0"
+-		file="/system/framework/vendor.xiaomi.hardware.displayfeature-V1.0-java.jar" />
+ </permissions>
