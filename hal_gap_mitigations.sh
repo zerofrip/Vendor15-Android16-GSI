@@ -1,4 +1,5 @@
 #!/system/bin/sh
+set +e  # Never abort — any individual failure is non-fatal
 # ============================================================
 # hal_gap_mitigations.sh
 # Vendor15 HAL Gap Mitigations — Runtime Detection & Fallback
@@ -200,15 +201,8 @@ log_info "  Audio: Spatial audio disabled, stereo-only, conservative routing"
 # ============================================================
 log_info "--- [5/7] Camera Provider Mitigations ---"
 
-# Disable Ultra HDR capture — requires camera.provider v4+
-# Without this, camera apps may request JPEG_R format which
-# the vendor HAL doesn't understand, causing capture failures.
-setprop persist.camera.ultrahdr.enabled false 2>/dev/null || true
-
-# Disable camera extensions API probing — extensions framework
-# queries the HAL for bokeh/night/HDR extensions. V1-3 HALs
-# may return malformed extension lists causing CameraService crash.
-setprop persist.camera.extensions.enabled false 2>/dev/null || true
+# NOTE: persist.camera.ultrahdr.enabled and persist.camera.extensions.enabled
+# are set by app_compat_mitigations.sh (authoritative script for camera)
 
 # Disable concurrent multi-camera — V15 HALs often crash when
 # framework opens multiple cameras simultaneously
@@ -220,8 +214,8 @@ setprop persist.camera.10bit_hdr_viewfinder false 2>/dev/null || true
 # Force HAL3 mode — ensures we don't try HAL4 dispatch paths
 setprop persist.camera.HAL3.enabled 1 2>/dev/null || true
 
-# Disable camera stream use case negotiation — V4 feature
-setprop persist.camera.stream_use_case_override 0 2>/dev/null || true
+# NOTE: persist.camera.stream_use_case_override is set by
+# app_compat_mitigations.sh (authoritative script for camera)
 
 log_info "  Camera: Ultra HDR/extensions/10-bit disabled, HAL3 forced"
 

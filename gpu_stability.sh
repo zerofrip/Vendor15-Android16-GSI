@@ -1,4 +1,5 @@
 #!/system/bin/sh
+set +e  # Never abort — any individual failure is non-fatal
 # ============================================================
 # gpu_stability.sh
 # Vendor15 GPU Stability — Runtime Detection & Fallback

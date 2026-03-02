@@ -1,0 +1,14 @@
+# ============================================================
+# gsi_forward_compat.rc — FIFTH (LAST) in chain
+# ============================================================
+
+service gsi_forward_compat /system/bin/sh /system/bin/forward_compat.sh
+    user root
+    group root system
+    oneshot
+    disabled
+
+# Final link — all mitigations complete
+on property:sys.gsi.forward_compat_done=1
+    write /dev/kmsg "GSI_FWDCOMPAT: All GSI mitigations applied."
+    setprop sys.gsi.all_mitigations_done 1

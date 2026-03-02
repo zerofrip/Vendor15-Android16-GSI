@@ -903,6 +903,68 @@ This is the **minimum survival checklist**. Missing ANY of these = bootloop:
 | 9 | SDK version sanity check bypass | PMS refuses to operate on "incompatible" data | Property + PMS patch |
 | 10 | Downgrade blocker | Flashing older GSI corrupts `/data` → **brick** | `gsi_survival.rc` script |
 
+### 6.5 Implemented Runtime Mitigation System
+
+The following has been implemented and integrated into the build:
+
+#### 6.5.1 Chained Execution Architecture
+
+5 runtime scripts execute in deterministic order via `init` property triggers.
+This eliminates race conditions between scripts that set overlapping properties.
+
+```
+post-fs-data
+  └─ boot_safety.sh (18 props)
+       └─ gpu_stability.sh (31 props)
+            └─ hal_gap_mitigations.sh (45 props)
+                 └─ app_compat_mitigations.sh (43 props)
+                      └─ forward_compat.sh (40 props)
+                           └─ sys.gsi.all_mitigations_done=1
+```
+
+Each `.rc` file starts its service only when the previous script sets its completion property.
+
+#### 6.5.2 Layer Summary
+
+| Layer | Script | Props | Key Mitigations |
+|-------|--------|-------|------------------|
+| 1. Boot Safety | `boot_safety.sh` | 18 | Rescue Party, sdcardfs→FUSE, atrace, SF crash recovery, watchdog 120s, tombstone limit |
+| 2. GPU Stability | `gpu_stability.sh` | 31 | GPU vendor detection (Adreno/Mali/PowerVR/Xclipse/IMG), Vulkan blocklist, software fallback |
+| 3. HAL Gaps | `hal_gap_mitigations.sh` | 45 | HWC composer, Power ADPF, WiFi 6E/7, Audio spatial, Camera v4, Biometrics v5, Radio VoNR |
+| 4. App Compat | `app_compat_mitigations.sh` | 43 | Camera LIMITED, BT LE Audio→A2DP, NNAPI CPU-only, biometric PIN fallback |
+| 5. Forward Compat | `forward_compat.sh` | 40 | AIDL version probing, Health/KeyMint gating, AVF/pVM disable, A18 compositor |
+
+#### 6.5.3 Bluetooth LOG(FATAL) Neutralization
+
+3 `LOG(FATAL)` calls in `HidlToAidlMiddleware.cpp` replaced with `LOG(ERROR)` + safe returns.
+These killed the BT audio service when vendors sent unexpected codec types (Samsung Scalable, aptX Adaptive).
+
+#### 6.5.4 Build Integration
+
+`vendor15_survival.mk` includes all 9 makefiles in order:
+
+```makefile
+# 1. Survival mode base
+# 2. VINTF enforcement disabled
+# 3. Frozen FCM
+# 4. VNDK compatibility
+# 5. GPU stability
+# 6. HAL gap mitigations
+# 7. App compatibility
+# 8. Boot safety
+# 9. Forward compatibility
+```
+
+`build.sh` stages all files to the TrebleDroid survival directory.
+
+#### 6.5.5 Safety Guarantees
+
+- Every `setprop` guarded with `2>/dev/null || true`
+- `set +e` at top of every script
+- Property ownership: each property has exactly one authoritative script
+- Chained execution eliminates parallel race conditions
+- All scripts are `oneshot` + `disabled` — never restart on failure
+
 ---
 
 ## 7. Risks and Hard Limits
@@ -1060,6 +1122,6 @@ adb shell "cat /data/system/.gsi_last_sdk_version"
 
 ---
 
-*Document version: 1.0*  
-*Last updated: 2026-02-27*  
-*Applicable to: Vendor15 (Android 15, FCM 202404) + Android 17+ GSIs*
+*Document version: 2.0*  
+*Last updated: 2026-03-02*  
+*Applicable to: Vendor15 (Android 15, FCM 202404) + Android 16–18 GSIs*

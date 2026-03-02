@@ -23,36 +23,100 @@ to maximize boot reliability across diverse vendors:
 Vendor15-GSI/
 ├── build.sh                                 # Main build script
 ├── compatibility_matrix_vendor15_frozen.xml  # Frozen FCM (all HALs optional, AIDL-only)
-├── gsi_survival.rc                          # Init script: upgrade-only boot gate
+│
+├── # ── Survival Mode: Boot Gate ──
+├── gsi_survival.rc                          # Init: upgrade-only boot gate
 ├── gsi_survival_check.sh                    # SDK comparison + cache sanitation
-├── vendor15_survival.mk                     # Build integration for survival mode
+├── vendor15_survival.mk                     # Master makefile (includes all .mk below)
+│
+├── # ── Runtime Mitigation Scripts ──
+├── boot_safety.sh                           # Layer 1: fatal path neutralization (18 props)
+├── gsi_boot_safety.rc                       # Init: chain start → triggers gpu_stability
+├── boot_safety.mk                           # Build: boot safety defaults
+│
+├── gpu_stability.sh                         # Layer 2: GPU detection & fallback (31 props)
+├── gsi_gpu_stability.rc                     # Init: chained → triggers hal_mitigations
+├── gpu_stability.mk                         # Build: GPU defaults
+├── gpu_vulkan_blocklist.cfg                 # Vulkan extension blocklist (19 extensions)
+│
+├── hal_gap_mitigations.sh                   # Layer 3: HAL version gap mitigations (45 props)
+├── gsi_hal_mitigations.rc                   # Init: chained → triggers app_compat
+├── hal_gap_mitigations.mk                   # Build: HAL defaults
+│
+├── app_compat_mitigations.sh                # Layer 4: app-facing feature gating (43 props)
+├── gsi_app_compat.rc                        # Init: chained → triggers forward_compat
+├── app_compat_mitigations.mk                # Build: app compat defaults
+│
+├── forward_compat.sh                        # Layer 5: Android 17/18 proofing (40 props)
+├── gsi_forward_compat.rc                    # Init: chain end → sets all_mitigations_done
+├── forward_compat.mk                        # Build: forward compat defaults
+│
+├── # ── Supporting Infrastructure ──
 ├── .github/workflows/                       # CI (self-hosted runner)
 ├── build/make/tools/vndk_compat/            # VNDK Compatibility Engine (Python)
 ├── docs/
 │   └── VENDOR15_LIFETIME_EXTENSION_ARCHITECTURE.md
 ├── patches/                                 # AOSP + TrebleDroid patches
 │   ├── build/make/
-│   │   └── 0001-Integrate-VNDK-compatibility-framework.patch
 │   ├── device/phh/treble/
-│   │   ├── 0001-Include-vendor15-survival-mode.patch
-│   │   ├── 0002-Remove-HIDL-fingerprint-from-framework-manifest.patch
-│   │   ├── 0003-Remove-HIDL-audio-from-bluetooth-manifest.patch
-│   │   ├── 0004-Remove-HIDL-libraries-from-interfaces.patch
-│   │   └── 0005-Remove-HIDL-packages-from-base-mk.patch
 │   ├── frameworks/base/
-│   │   └── 0001-Allow-mismatched-vendor.patch
 │   └── system/core/
-│       └── 0001-Disable-VINTF-check-for-GSI.patch
 ├── scripts/
-│   ├── apply_patches.sh                     # Applies patches to AOSP tree
-│   ├── validate_patches.sh                  # Pre-build patch dry-run validator
-│   ├── verify_aidl_only.sh                  # AIDL-only compliance checker
-│   └── verify_survival.sh                   # Post-build survival mode verification
+│   ├── apply_patches.sh
+│   ├── validate_patches.sh
+│   ├── verify_aidl_only.sh
+│   └── verify_survival.sh
 └── trebledroid/                             # TrebleDroid submodules
     ├── device_phh_treble/
     ├── vendor_hardware_overlay/
     └── treble_app/
 ```
+
+## Runtime Mitigation System
+
+The GSI ships **5 runtime mitigation scripts** that execute in a deterministic
+chain during boot via `init` property triggers. Each script probes vendor
+capabilities at runtime and sets conservative system properties.
+
+### Execution Chain
+
+```
+post-fs-data
+  └─ boot_safety (18 props)
+       └─ gpu_stability (31 props)
+            └─ hal_mitigations (45 props)
+                 └─ app_compat (43 props)
+                      └─ forward_compat (40 props)
+                           └─ sys.gsi.all_mitigations_done=1
+```
+
+**Total: ~177 runtime property adjustments + 43 build-time defaults**
+
+### Mitigation Layers
+
+| Layer | Script | Purpose |
+|-------|--------|---------|
+| **1. Boot Safety** | `boot_safety.sh` | Rescue Party suppression, sdcardfs→FUSE, atrace disable, SurfaceFlinger crash recovery, watchdog timeout, tombstone limits |
+| **2. GPU Stability** | `gpu_stability.sh` | GPU vendor detection (Adreno/Mali/PowerVR/Xclipse/IMG), Vulkan extension blocklist, software rendering fallback |
+| **3. HAL Gaps** | `hal_gap_mitigations.sh` | 7 HAL areas: HWC composer, Power ADPF, WiFi 6E/7, Audio spatial, Camera v4, Biometrics v5, Radio VoNR |
+| **4. App Compat** | `app_compat_mitigations.sh` | Camera LIMITED cap, BT LE Audio→A2DP fallback, NNAPI CPU-only, biometric PIN fallback, WiFi advanced masking |
+| **5. Forward Compat** | `forward_compat.sh` | AIDL version probing, ServiceManager resilience, Health/KeyMint gating, AVF/pVM disable, A18 compositor masking |
+
+### Design Rules
+
+- Every operation guarded with `|| true` — no script can crash
+- `set +e` at top of every script — no abort on command failure
+- Property ownership: each property has exactly one authoritative script
+- Chain ordering prevents race conditions between scripts
+
+## Code Fixes
+
+### Bluetooth HidlToAidlMiddleware (3 LOG(FATAL) neutralized)
+
+The HIDL-to-AIDL bridge in `trebledroid/device_phh_treble/bluetooth/audio/`
+contained 3 `LOG(FATAL)` calls that killed the BT audio service when a vendor
+sent an unexpected codec type (Samsung Scalable, aptX Adaptive, etc.).
+Replaced with `LOG(ERROR)` + safe fallback returns.
 
 ## Vendor Compatibility
 
@@ -63,15 +127,14 @@ Vendor15-GSI/
 | Android 15 with AIDL HALs | ✅ Yes | Primary target |
 | Android 14 with AIDL HALs | ✅ Likely | Most A14 vendors have AIDL |
 | Android 13 with AIDL HALs | ⚠️ Possible | May lack newer AIDL versions |
-| Pre-A13 (HIDL-only) | ❌ No | Not supported — too many breaking changes |
+| Pre-A13 (HIDL-only) | ❌ No | Not supported |
 
 ### Why AIDL-Only & Binder-Only?
 
-- **Boot reliability**: Eliminates dual-transport complexity (no hwbinder cross-domain SELinux)
-- **Single IPC path**: All HAL communication uses binder, not binder+hwbinder
-- **No hwservicemanager**: AIDL-only vendors may not run hwservicemanager; HIDL declarations would cause stalled lookups and SELinux denials
+- **Boot reliability**: Eliminates dual-transport complexity
+- **Single IPC path**: All HAL communication uses binder
 - **Forward-compatible**: Android 17+ drops HIDL entirely
-- **Reduced failure surface**: No HIDL→AIDL adapters, no hwservicemanager timing races, no HIDL Java libraries in boot classpath
+- **Reduced failure surface**: No HIDL→AIDL adapters, no hwservicemanager races
 
 ### HAL Requirements
 
@@ -80,28 +143,24 @@ Missing vendor HALs degrade gracefully — they **never block boot**.
 
 ## HIDL Removal (Patches 0002–0005)
 
-The TrebleDroid submodule ships legacy HIDL artifacts for backward compatibility
-with older devices. The following are removed at build time to enforce AIDL-only policy:
-
 | Patch | What it Removes | Why |
 |-------|----------------|-----|
-| `0002` | HIDL fingerprint v2.1 in `framework_manifest.xml` | hwbinder transport → SELinux denials on AIDL-only vendors |
-| `0003` | HIDL audio @2.0–7.1 in `bluetooth_audio_system.xml` | False hwbinder service registrations stall boot |
-| `0004` | HIDL library registrations in `interfaces.xml` | `android.hidl.manager` + vendor HIDL JARs waste classloader resources |
-| `0005` | HIDL packages + Oppo/Oplus compat services in `base.mk` | HIDL boot JARs loaded by Zygote; compat services need hwbinder |
-
-> **Note**: Oppo/Realme devices that rely on HIDL fingerprint compat services are
-> out of scope. These devices require hwbinder, which is incompatible with the
-> AIDL-only policy.
+| `0002` | HIDL fingerprint v2.1 | hwbinder transport → SELinux denials |
+| `0003` | HIDL audio @2.0–7.1 | False hwbinder registrations stall boot |
+| `0004` | HIDL library registrations | vendor HIDL JARs waste classloader resources |
+| `0005` | HIDL packages + Oppo compat services | HIDL boot JARs loaded by Zygote |
 
 ## Survival Mode
 
 The GSI includes a **survival mode** system that:
 
-1. **Upgrade-only enforcement** — Prevents SDK downgrades that would corrupt userdata
-2. **Cache sanitation** — Clears dalvik-cache, resource-cache, and package_cache on SDK upgrades
-3. **VINTF bypass** — Freezes the compatibility matrix against Vendor15 HAL versions
-4. **Rescue Party suppression** — Prevents factory reset on repeated framework crashes
+1. **Upgrade-only enforcement** — Prevents SDK downgrades that corrupt userdata
+2. **Cache sanitation** — Clears dalvik-cache, resource-cache on SDK upgrades
+3. **VINTF bypass** — Freezes compatibility matrix at Vendor15 HAL versions
+4. **Rescue Party suppression** — Prevents factory reset on framework crashes
+5. **Chained runtime mitigations** — 5 scripts execute in deterministic order
+6. **Fatal path neutralization** — All LOG(FATAL) in repo code eliminated
+7. **A17/18 forward-compatibility** — AIDL version probing and feature masking
 
 ### Boot Gate Flow
 
@@ -111,20 +170,10 @@ post-fs-data
        ├─ first_boot  → record SDK baseline, continue
        ├─ normal      → same SDK, continue
        ├─ upgrade     → clear caches, update baseline, continue
-       └─ downgrade   → HALT, log fatal, reboot
+       └─ downgrade   → HALT, log fatal, reboot to recovery
 ```
 
-### Boot Safety Properties
-
-- No `seclabel` — runs in init's universal context (works on all SELinux policies)
-- No `class` membership — not part of core/main/hal (failure is invisible to boot)
-- No `exec` shell blocks — all triggers use native init builtins
-- No HAL access — zero binder/hwbinder calls during init
-- Fail-open — errors default to "continue boot"
-
 ## How to Build
-
-### Local Build
 
 ```bash
 ./build.sh
@@ -134,53 +183,46 @@ This will:
 1. Initialize the AOSP repository (Android 16)
 2. Sync the source code
 3. Set up TrebleDroid device tree
-4. Stage survival mode files
+4. Stage all survival mode files (boot safety, GPU, HAL, app compat, forward compat)
 5. Apply all patches (VINTF bypass + HIDL removal + survival mode)
 6. Build the GSI system image
 7. Run post-build survival mode verification
 
 ### GitHub Actions (Self-Hosted Runner)
 
-> Standard GitHub-hosted runners do not have enough disk space.
 > A self-hosted runner with **300GB+ free** is required.
-
-1. Go to Repository → Settings → Actions → Runners
-2. Click "New self-hosted runner"
-3. Install the runner agent on your build server
-4. The workflow runs via `runs-on: self-hosted`
 
 ## Verification Scripts
 
 | Script | When to Run | What it Checks |
 |--------|-------------|----------------|
-| `verify_aidl_only.sh` | After applying patches | No hwbinder, no HIDL fqnames, no HIDL packages, no mandatory HALs |
-| `verify_survival.sh` | After building | Survival files installed, properties set, FCM in VINTF |
-| `validate_patches.sh` | Before building | All patches apply cleanly to AOSP tree |
+| `verify_aidl_only.sh` | After patches | No hwbinder, no HIDL, no mandatory HALs |
+| `verify_survival.sh` | After building | Survival files installed, properties set |
+| `validate_patches.sh` | Before building | All patches apply cleanly |
+
+## Diagnostic Commands
 
 ```bash
-# Run AIDL-only compliance check
-bash scripts/verify_aidl_only.sh
+# Check mitigation status
+adb shell getprop sys.gsi.all_mitigations_done        # Should be 1
+adb shell getprop sys.gsi.boot_safety_done             # Should be 1
+adb shell getprop sys.gsi.gpu_stability_done           # Should be 1
+adb shell getprop sys.gsi.hal_mitigations_done         # Should be 1
+adb shell getprop sys.gsi.app_compat_done              # Should be 1
+adb shell getprop sys.gsi.forward_compat_done          # Should be 1
 
-# Validate patches against AOSP tree
-bash scripts/validate_patches.sh /path/to/aosp patches/
+# Check VINTF status
+adb shell getprop ro.vintf.enforce                     # Should be false
+
+# Check GPU vendor detection
+adb shell getprop sys.gsi.gpu_vendor                   # adreno/mali/powervr/etc
+
+# Check for crash loops
+adb shell "dumpsys dropbox --print 2>/dev/null | grep -c system_server"
+
+# Check SELinux
+adb shell getenforce
 ```
-
-## VNDK Compatibility Engine
-
-Located in `build/make/tools/vndk_compat/`. Activated via:
-
-```bash
-export TARGET_ENABLE_VNDK_COMPAT=true
-export TARGET_VENDOR_API_LEVEL=15
-export TARGET_SYSTEM_API_LEVEL=16
-```
-
-Components:
-- **API Model Generator** — Extracts symbol-level contracts from system libraries
-- **Diff Engine** — Compares vendor requirements vs. system provisions
-- **Scoring System** — Numeric health metric (`ro.vndk.compat_score`)
-- **Shim Generator** — Creates forwarding shims for safe-to-shim symbols
-- **Linker IR** — Graph-based linker namespace isolation
 
 ## Patches
 
@@ -191,5 +233,3 @@ Components:
 | `device/phh/treble/` (0002–0005) | HIDL removal for AIDL-only compliance |
 | `frameworks/base/` | VINTF enforcement bypass in VintfObject |
 | `system/core/` | Init-level VINTF check bypass |
-
-Use `scripts/validate_patches.sh` to verify patches still apply cleanly before building.

@@ -1,4 +1,5 @@
 #!/system/bin/sh
+set +e  # Never abort — any individual failure is non-fatal
 # ============================================================
 # app_compat_mitigations.sh
 # Vendor15 App Compatibility — Feature Gating & Fallbacks

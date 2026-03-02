@@ -60,3 +60,13 @@ include device/phh/treble/vendor15/hal_gap_mitigations.mk
 # 7. App Compatibility — conservative app-facing defaults
 # -----------------------------------------------------------
 include device/phh/treble/vendor15/app_compat_mitigations.mk
+
+# -----------------------------------------------------------
+# 8. Boot Safety — fatal path neutralization
+# -----------------------------------------------------------
+include device/phh/treble/vendor15/boot_safety.mk
+
+# -----------------------------------------------------------
+# 9. Forward Compatibility — Android 17/18 proofing
+# -----------------------------------------------------------
+include device/phh/treble/vendor15/forward_compat.mk

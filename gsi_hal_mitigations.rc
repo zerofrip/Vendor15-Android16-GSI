@@ -1,40 +1,14 @@
 # ============================================================
-# gsi_hal_mitigations.rc
-# Vendor15 HAL Gap Mitigations — Init Configuration
-# ============================================================
-#
-# Runs hal_gap_mitigations.sh to probe vendor HALs and apply
-# conservative fallback properties for all 7 HAL gap areas.
-#
-# Boot safety:
-#   - No seclabel (runs in init context — universally available)
-#   - No class membership (not part of core/main/hal)
-#   - oneshot + disabled (only runs when triggered)
-#   - Script is fully guarded (never blocks or aborts)
+# gsi_hal_mitigations.rc — THIRD in chain
 # ============================================================
 
-# -------------------------------------------------------
-# Service: gsi_hal_mitigations
-# Probes vendor HALs and applies conservative defaults.
-# -------------------------------------------------------
 service gsi_hal_mitigations /system/bin/sh /system/bin/hal_gap_mitigations.sh
     user root
     group root system
     oneshot
     disabled
-    # NO seclabel — runs in init's own context
-    # NO class — not part of any class start/stop group
 
-# -------------------------------------------------------
-# Trigger: post-fs-data — start HAL mitigation check
-# Must run after vendor partition is mounted but before
-# the framework starts using HAL services.
-# -------------------------------------------------------
-on post-fs-data
-    start gsi_hal_mitigations
-
-# -------------------------------------------------------
-# Trigger: completion — informational only
-# -------------------------------------------------------
+# Chain: hal_mitigations → app_compat
 on property:sys.gsi.hal_mitigations_done=1
-    write /dev/kmsg "GSI_HAL: HAL gap mitigations applied."
+    write /dev/kmsg "GSI_HAL: HAL mitigations done. Starting app compat."
+    start gsi_app_compat

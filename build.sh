@@ -387,6 +387,38 @@ cp -v "$WORK_DIR/app_compat_mitigations.mk" \
 
 echo "App compatibility files staged to $SURVIVAL_DIR"
 
+# --- Boot Safety files ---
+echo ""
+echo "--- Staging Boot Safety Files ---"
+
+cp -v "$WORK_DIR/boot_safety.sh" \
+      "$SURVIVAL_DIR/boot_safety.sh"
+chmod 755 "$SURVIVAL_DIR/boot_safety.sh"
+
+cp -v "$WORK_DIR/gsi_boot_safety.rc" \
+      "$SURVIVAL_DIR/gsi_boot_safety.rc"
+
+cp -v "$WORK_DIR/boot_safety.mk" \
+      "$SURVIVAL_DIR/boot_safety.mk"
+
+echo "Boot safety files staged to $SURVIVAL_DIR"
+
+# --- Forward Compatibility files ---
+echo ""
+echo "--- Staging Forward Compatibility Files ---"
+
+cp -v "$WORK_DIR/forward_compat.sh" \
+      "$SURVIVAL_DIR/forward_compat.sh"
+chmod 755 "$SURVIVAL_DIR/forward_compat.sh"
+
+cp -v "$WORK_DIR/gsi_forward_compat.rc" \
+      "$SURVIVAL_DIR/gsi_forward_compat.rc"
+
+cp -v "$WORK_DIR/forward_compat.mk" \
+      "$SURVIVAL_DIR/forward_compat.mk"
+
+echo "Forward compatibility files staged to $SURVIVAL_DIR"
+
 # ============================================================
 # 4. Apply Patches (unconditional)
 # ============================================================

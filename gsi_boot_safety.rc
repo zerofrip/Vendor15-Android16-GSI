@@ -1,0 +1,18 @@
+# ============================================================
+# gsi_boot_safety.rc — FIRST in chain
+# ============================================================
+
+service gsi_boot_safety /system/bin/sh /system/bin/boot_safety.sh
+    user root
+    group root system
+    oneshot
+    disabled
+
+# Boot safety runs first on post-fs-data
+on post-fs-data
+    start gsi_boot_safety
+
+# Chain: boot_safety → gpu_stability
+on property:sys.gsi.boot_safety_done=1
+    write /dev/kmsg "GSI_SAFETY: Boot safety done. Starting GPU stability."
+    start gsi_gpu_stability
