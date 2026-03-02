@@ -2,6 +2,7 @@
 import json
 import argparse
 import sys
+from typing import Dict
 
 # Penalty weights as defined in the design spec
 PENALTIES = {
@@ -62,4 +63,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-from typing import Dict
+

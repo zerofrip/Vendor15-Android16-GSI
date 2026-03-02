@@ -12,26 +12,45 @@ This project provides a set of scripts and patches to build an **Android 16 Gene
 
 ```
 Vendor15-Android16-GSI/
-├── README.md           # This file
-├── build.sh            # Main build script with VNDK compat flags
-├── .github/            # GitHub Actions CI/CD configuration
+├── README.md                           # This file
+├── build.sh                            # Main build script with VNDK compat flags
+├── .github/                            # GitHub Actions CI/CD configuration
+│   └── workflows/
+│       └── build_gsi.yml               # Self-hosted runner workflow
+├── compatibility_matrix_vendor15_frozen.xml  # Frozen FCM for Vendor15 HALs
+├── gsi_survival.rc                     # Init script: upgrade-only boot gate
+├── gsi_survival_check.sh               # Boot gate: SDK comparison + cache wipe
+├── vendor15_survival.mk                # Build integration for survival mode
 ├── build/
 │   └── make/
 │       ├── core/
-│       │   └── vndk_compat.mk  # Build system integration
+│       │   └── vndk_compat.mk          # Build system integration
 │       └── tools/
-│           └── vndk_compat/     # Advanced Compatibility Engine
-│               ├── policies/     # Compat policies (v15, v17)
+│           └── vndk_compat/            # VNDK Compatibility Engine (Python)
+│               ├── Android.bp          # Blueprint for host tools
+│               ├── models/             # API model JSON files (see README)
+│               ├── policies/           # Compat policies (v15)
 │               ├── vndk_compat_engine.py
+│               ├── vndk_diff_engine.py
 │               ├── scoring_system.py
+│               ├── shim_generator.py
+│               ├── linker_ir.py
 │               └── ...
-├── patches/            # Mandatory patches to AOSP source tree
-│   ├── build/make/     # Framework integration patches
-│   ├── frameworks/base/# Legacy HAL support patches
-│   └── system/core/    # VINTF bypass and init patches
-├── scripts/            # Helper scripts
-│   └── apply_patches.sh
-└── trebledroid/        # TrebleDroid Submodules (Device/Hardware/App)
+├── docs/
+│   └── VENDOR15_LIFETIME_EXTENSION_ARCHITECTURE.md  # Design reference
+├── patches/                            # Mandatory patches to AOSP source tree
+│   ├── build/make/                     # Framework integration patches
+│   ├── device/phh/treble/              # Survival mode inclusion patch
+│   ├── frameworks/base/                # VINTF bypass patches
+│   └── system/core/                    # Init VINTF check bypass
+├── scripts/                            # Helper scripts
+│   ├── apply_patches.sh                # Applies patches to AOSP tree
+│   ├── validate_patches.sh             # Pre-build patch dry-run validator
+│   └── verify_survival.sh             # Post-build survival mode verification
+└── trebledroid/                        # TrebleDroid Submodules
+    ├── device_phh_treble/
+    ├── vendor_hardware_overlay/
+    └── treble_app/
 ```
 
 ## Features

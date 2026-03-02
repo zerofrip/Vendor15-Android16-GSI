@@ -8,6 +8,32 @@ set -e
 # Survival design: frozen FCM, upgrade-only, VINTF bypass
 # ============================================================
 
+# ======================== Error Handler ========================
+BUILD_START=$(date +%s)
+
+on_error() {
+    local exit_code=$?
+    local line_no=$1
+    local duration=$(( $(date +%s) - BUILD_START ))
+    echo ""
+    echo "=== BUILD FAILED ==="
+    echo "  Exit code : $exit_code"
+    echo "  Failed at : line $line_no"
+    echo "  Duration  : $((duration / 60))m $((duration % 60))s"
+    echo "  Script    : $0"
+    echo ""
+    echo "  Hint: Review the output above for the actual error."
+    echo "  Common causes:"
+    echo "    - Patch failed to apply (stale patch vs. AOSP revision)"
+    echo "    - Missing build dependencies"
+    echo "    - Source sync failure"
+    echo "    - Lunch target mismatch"
+    echo "==================="
+    exit $exit_code
+}
+
+trap 'on_error $LINENO' ERR
+
 # ======================== Configuration ========================
 ANDROID_VERSION="android-16.0.0_r1"
 ANDROID_MAJOR_VERSION="16"
@@ -336,8 +362,14 @@ lunch $LUNCH_TARGET
 echo "Starting Build..."
 m systemimage
 
+BUILD_END=$(date +%s)
+BUILD_DURATION=$(( BUILD_END - BUILD_START ))
+
 echo ""
 echo "=== Build Complete! ==="
+echo "  Duration: $((BUILD_DURATION / 60))m $((BUILD_DURATION % 60))s"
+echo "  Started : $(date -d @$BUILD_START '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -r $BUILD_START '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo 'N/A')"
+echo "  Finished: $(date '+%Y-%m-%d %H:%M:%S')"
 ls -lh out/target/product/*/system.img 2>/dev/null || \
     ls -lh out/target/product/treble_arm64_bvN/system.img
 
@@ -346,4 +378,16 @@ if [ "${USE_CCACHE:-0}" = "1" ] && command -v ccache >/dev/null 2>&1; then
     echo ""
     echo "=== ccache stats (post-build) ==="
     ccache -s 2>/dev/null | grep -E "cache hit|cache miss|cache size" | sed 's/^/  /' || true
+fi
+
+# ============================================================
+# 6. Post-Build Verification
+# ============================================================
+echo ""
+echo "=== Step 6: Verifying Survival Mode Integration ==="
+if [ -f "$SCRIPTS_DIR/verify_survival.sh" ]; then
+    bash "$SCRIPTS_DIR/verify_survival.sh" || \
+        echo "WARNING: Survival mode verification reported issues. Review output above."
+else
+    echo "Warning: verify_survival.sh not found. Skipping post-build verification."
 fi

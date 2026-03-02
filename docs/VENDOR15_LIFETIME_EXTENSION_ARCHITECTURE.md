@@ -809,95 +809,82 @@ persist.sys.gsi.skip_sdk_check=true
 
 **`/system/etc/init/gsi_survival.rc`** — Must be included in the GSI image:
 
+> [!NOTE]
+> The actual implementation uses **property-based SDK tracking** (`persist.sys.prev_sdk`)
+> rather than the file-based approach (`/data/system/.gsi_last_sdk_version`) originally
+> proposed. This is more robust because Android's property system handles persistence
+> atomically and survives partial boots where file writes might not complete.
+
 ```rc
 # ============================================================
-# GSI Survival Init Script
-# Vendor15 Compatibility Lifetime Extension
+# gsi_survival.rc
+# Vendor15 Compatibility Lifetime Extension — Init Configuration
+# ============================================================
+#
+# Flow:
+#   1. post-fs-data: run gsi_survival_check.sh (SDK comparison)
+#   2. Script sets sys.gsi.boot_decision property
+#   3. Init reacts:
+#      - "downgrade"  → halt boot, log fatal, reboot to recovery
+#      - "upgrade"    → continue boot (caches already wiped by script)
+#      - "normal"     → continue boot
+#      - "first_boot" → continue boot
+#
+# Properties used:
+#   persist.sys.prev_sdk       — high-water-mark of last booted SDK
+#   persist.sys.gsi_upgrade    — "1" during the single upgrade boot
+#   sys.gsi.boot_decision      — set by script, consumed by triggers
 # ============================================================
 
-on early-init
-    # Record the current SDK version for upgrade-only enforcement
-    # This runs before data is mounted
-    setprop ro.gsi.init.phase early
+# Service: gsi_survival_gate
+# Runs the upgrade/downgrade check after /data is mounted.
+service gsi_survival_gate /system/bin/sh /system/bin/gsi_survival_check.sh
+    class core
+    user root
+    group root system
+    oneshot
+    disabled
+    seclabel u:r:su:s0
 
 on post-fs-data
-    # ----- UPGRADE-ONLY ENFORCEMENT (DOWNGRADE BLOCKER) -----
-    
-    # Check if we have a recorded SDK version from a previous boot
-    # If current SDK < recorded SDK, we are DOWNGRADING → block boot
-    exec_background -- /system/bin/sh -c "\
-        RECORDED_FILE=/data/system/.gsi_last_sdk_version; \
-        CURRENT_SDK=$(getprop ro.build.version.sdk); \
-        if [ -f $RECORDED_FILE ]; then \
-            RECORDED_SDK=$(cat $RECORDED_FILE); \
-            if [ $CURRENT_SDK -lt $RECORDED_SDK ]; then \
-                setprop sys.gsi.downgrade_detected true; \
-                echo 'FATAL: GSI downgrade detected ($CURRENT_SDK < $RECORDED_SDK)' > /dev/kmsg; \
-                echo 'Factory reset required to continue.' > /dev/kmsg; \
-            fi; \
-        fi; \
-        echo $CURRENT_SDK > $RECORDED_FILE; \
-        chmod 0600 $RECORDED_FILE; \
-        chown system:system $RECORDED_FILE"
+    start gsi_survival_gate
 
-    # ----- VINTF CHECK SUPPRESSION -----
-    # Force VINTF module to skip enforcement
-    setprop ro.vintf.enforce false
-    setprop vintf.compat.check_result 0
-
-    # ----- VENDOR HAL WATCHDOG -----
-    # If critical vendor HALs haven't started within timeout,
-    # set degraded mode properties
-    exec_background -- /system/bin/sh -c "\
-        sleep 10; \
-        if ! service_check vendor.hwcomposer-2-4 && \
-           ! service_check android.hardware.graphics.composer3-service; then \
-            setprop sys.gsi.hwc_missing true; \
-            setprop debug.sf.hw 0; \
-            echo 'WARNING: HWC not found, forcing GPU composition' > /dev/kmsg; \
-        fi"
-
-on property:sys.gsi.downgrade_detected=true
-    # If downgrade is detected, display warning and halt
-    # In practice, you'd trigger a recovery boot here
+# DOWNGRADE DETECTED — halt boot
+on property:sys.gsi.boot_decision=downgrade
+    write /dev/kmsg "GSI_SURVIVAL: FATAL: DOWNGRADE DETECTED"
+    write /dev/kmsg "GSI_SURVIVAL: Flash SDK >= persist.sys.prev_sdk or wipe data."
     class_stop main
     class_stop late_start
-    # Write message to framebuffer console if available
-    exec -- /system/bin/sh -c "\
-        echo '=== GSI DOWNGRADE BLOCKED ===' > /dev/kmsg; \
-        echo 'Downgrade from SDK $(cat /data/system/.gsi_last_sdk_version) to $(getprop ro.build.version.sdk) is not allowed.' > /dev/kmsg; \
-        echo 'Please flash equal or newer GSI, or factory reset.' > /dev/kmsg"
+    class_stop hal
+    exec -- /system/bin/sleep 2
+    setprop sys.powerctl reboot,recovery
 
+# UPGRADE DETECTED
+on property:sys.gsi.boot_decision=upgrade
+    write /dev/kmsg "GSI_SURVIVAL: Upgrade boot in progress. Caches cleared."
+
+# NORMAL BOOT
+on property:sys.gsi.boot_decision=normal
+    write /dev/kmsg "GSI_SURVIVAL: Normal boot. No version change detected."
+
+# FIRST BOOT
+on property:sys.gsi.boot_decision=first_boot
+    write /dev/kmsg "GSI_SURVIVAL: First boot detected. SDK baseline recorded."
+
+# Finalize upgrade flag on boot completion
 on property:sys.boot_completed=1
-    # ----- POST-BOOT DIAGNOSTICS -----
-    exec_background -- /system/bin/sh -c "\
-        echo '=== GSI Survival Mode Active ===' > /dev/kmsg; \
-        echo 'Vendor level: $(getprop ro.gsi.compat.vendor_level)' > /dev/kmsg; \
-        echo 'System SDK: $(getprop ro.build.version.sdk)' > /dev/kmsg; \
-        echo 'HWC missing: $(getprop sys.gsi.hwc_missing)' > /dev/kmsg; \
-        echo 'VINTF enforced: $(getprop ro.vintf.enforce)' > /dev/kmsg; \
-        echo 'Power hints: $(getprop ro.power.hint_session.enabled)' > /dev/kmsg; \
-        echo '==============================' > /dev/kmsg"
+    exec -- /system/bin/sh -c "\
+        if [ \"$(getprop persist.sys.gsi_upgrade)\" = \"1\" ]; then \
+            setprop persist.sys.gsi_upgrade 0; \
+            log -t GSI_SURVIVAL -p i 'Upgrade boot completed.'; \
+        fi"
+    write /dev/kmsg "GSI_SURVIVAL: === Boot Complete ==="
 
-# ----- VENDOR SERVICE FALLBACKS -----
-# If vendor services fail to start, start system-side stubs
-
-service gsi_power_stub /system/bin/android.hardware.power-default
-    class hal
-    disabled
-    oneshot
-
-on property:init.svc.vendor.power-hal-aidl=stopped
-    # Vendor power HAL crashed or never started — start stub
-    start gsi_power_stub
-
-service gsi_thermal_stub /system/bin/android.hardware.thermal-default
-    class hal
-    disabled
-    oneshot
-
-on property:init.svc.vendor.thermal-hal=stopped
-    start gsi_thermal_stub
+# VINTF bypass properties (early-init)
+on early-init
+    setprop ro.vintf.enforce false
+    setprop persist.sys.disable_rescue true
+    write /dev/kmsg "GSI_SURVIVAL: Survival mode active (early-init)"
 ```
 
 ### 6.4 Must-Have Items That Will Otherwise Cause Bootloops

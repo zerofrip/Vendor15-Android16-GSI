@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import argparse
+import os
 from typing import Dict, List, Set, Any
 
 class NamespaceNode:
@@ -80,6 +81,6 @@ def main():
     with open(args.output, 'w') as f:
         json.dump(ir.export_json(), f, indent=2)
 
-import os
 if __name__ == '__main__':
     main()
+
