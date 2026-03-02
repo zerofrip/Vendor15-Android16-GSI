@@ -336,6 +336,41 @@ cp -v "$WORK_DIR/vendor15_survival.mk" \
 
 echo "Survival files staged to $SURVIVAL_DIR"
 
+# --- GPU Stability files ---
+echo ""
+echo "--- Staging GPU Stability Files ---"
+
+cp -v "$WORK_DIR/gpu_stability.sh" \
+      "$SURVIVAL_DIR/gpu_stability.sh"
+chmod 755 "$SURVIVAL_DIR/gpu_stability.sh"
+
+cp -v "$WORK_DIR/gsi_gpu_stability.rc" \
+      "$SURVIVAL_DIR/gsi_gpu_stability.rc"
+
+cp -v "$WORK_DIR/gpu_vulkan_blocklist.cfg" \
+      "$SURVIVAL_DIR/gpu_vulkan_blocklist.cfg"
+
+cp -v "$WORK_DIR/gpu_stability.mk" \
+      "$SURVIVAL_DIR/gpu_stability.mk"
+
+echo "GPU stability files staged to $SURVIVAL_DIR"
+
+# --- HAL Gap Mitigation files ---
+echo ""
+echo "--- Staging HAL Gap Mitigation Files ---"
+
+cp -v "$WORK_DIR/hal_gap_mitigations.sh" \
+      "$SURVIVAL_DIR/hal_gap_mitigations.sh"
+chmod 755 "$SURVIVAL_DIR/hal_gap_mitigations.sh"
+
+cp -v "$WORK_DIR/gsi_hal_mitigations.rc" \
+      "$SURVIVAL_DIR/gsi_hal_mitigations.rc"
+
+cp -v "$WORK_DIR/hal_gap_mitigations.mk" \
+      "$SURVIVAL_DIR/hal_gap_mitigations.mk"
+
+echo "HAL gap mitigation files staged to $SURVIVAL_DIR"
+
 # ============================================================
 # 4. Apply Patches (unconditional)
 # ============================================================

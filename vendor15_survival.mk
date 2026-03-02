@@ -45,3 +45,13 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 # 4. Disable VINTF enforcement at build level
 # -----------------------------------------------------------
 PRODUCT_ENFORCE_VINTF_MANIFEST := false
+
+# -----------------------------------------------------------
+# 5. GPU Stability — conservative GPU fallbacks
+# -----------------------------------------------------------
+include device/phh/treble/vendor15/gpu_stability.mk
+
+# -----------------------------------------------------------
+# 6. HAL Gap Mitigations — conservative HAL fallbacks
+# -----------------------------------------------------------
+include device/phh/treble/vendor15/hal_gap_mitigations.mk

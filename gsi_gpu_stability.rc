@@ -1,0 +1,41 @@
+# ============================================================
+# gsi_gpu_stability.rc
+# Vendor15 GPU Stability — Init Configuration
+# ============================================================
+#
+# Runs gpu_stability.sh to detect vendor GPU state and apply
+# conservative fallback properties for crash avoidance.
+#
+# Boot safety:
+#   - No seclabel (runs in init context — universally available)
+#   - No class membership (not part of core/main/hal)
+#   - oneshot + disabled (only runs when triggered)
+#   - Script is fully guarded (never blocks or aborts)
+# ============================================================
+
+# -------------------------------------------------------
+# Service: gsi_gpu_stability
+# Runs GPU detection and fallback after /vendor is mounted.
+# -------------------------------------------------------
+service gsi_gpu_stability /system/bin/sh /system/bin/gpu_stability.sh
+    user root
+    group root system
+    oneshot
+    disabled
+    # NO seclabel — runs in init's own context, which is
+    # universally available across all vendor SELinux policies.
+    # NO class — not part of any class start/stop group.
+
+# -------------------------------------------------------
+# Trigger: post-fs-data — start GPU stability check
+# Must run after vendor partition is mounted but before
+# apps start, so properties are set in time.
+# -------------------------------------------------------
+on post-fs-data
+    start gsi_gpu_stability
+
+# -------------------------------------------------------
+# Trigger: completion — informational only
+# -------------------------------------------------------
+on property:sys.gsi.gpu_stability_done=1
+    write /dev/kmsg "GSI_GPU: GPU stability configuration applied."
