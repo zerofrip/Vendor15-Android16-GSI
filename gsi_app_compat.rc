@@ -1,0 +1,36 @@
+# ============================================================
+# gsi_app_compat.rc
+# Vendor15 App Compatibility — Init Configuration
+# ============================================================
+#
+# Runs app_compat_mitigations.sh to set app-facing feature
+# flags and conservative capability properties.
+#
+# Boot safety:
+#   - No seclabel (runs in init context)
+#   - No class membership
+#   - oneshot + disabled
+#   - Script never blocks or aborts
+# ============================================================
+
+# -------------------------------------------------------
+# Service: gsi_app_compat
+# Sets app-facing capability properties.
+# -------------------------------------------------------
+service gsi_app_compat /system/bin/sh /system/bin/app_compat_mitigations.sh
+    user root
+    group root system
+    oneshot
+    disabled
+
+# -------------------------------------------------------
+# Trigger: post-fs-data — start app compat check
+# -------------------------------------------------------
+on post-fs-data
+    start gsi_app_compat
+
+# -------------------------------------------------------
+# Trigger: completion
+# -------------------------------------------------------
+on property:sys.gsi.app_compat_done=1
+    write /dev/kmsg "GSI_COMPAT: App compatibility mitigations applied."

@@ -371,6 +371,22 @@ cp -v "$WORK_DIR/hal_gap_mitigations.mk" \
 
 echo "HAL gap mitigation files staged to $SURVIVAL_DIR"
 
+# --- App Compatibility files ---
+echo ""
+echo "--- Staging App Compatibility Files ---"
+
+cp -v "$WORK_DIR/app_compat_mitigations.sh" \
+      "$SURVIVAL_DIR/app_compat_mitigations.sh"
+chmod 755 "$SURVIVAL_DIR/app_compat_mitigations.sh"
+
+cp -v "$WORK_DIR/gsi_app_compat.rc" \
+      "$SURVIVAL_DIR/gsi_app_compat.rc"
+
+cp -v "$WORK_DIR/app_compat_mitigations.mk" \
+      "$SURVIVAL_DIR/app_compat_mitigations.mk"
+
+echo "App compatibility files staged to $SURVIVAL_DIR"
+
 # ============================================================
 # 4. Apply Patches (unconditional)
 # ============================================================

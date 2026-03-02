@@ -55,3 +55,8 @@ include device/phh/treble/vendor15/gpu_stability.mk
 # 6. HAL Gap Mitigations — conservative HAL fallbacks
 # -----------------------------------------------------------
 include device/phh/treble/vendor15/hal_gap_mitigations.mk
+
+# -----------------------------------------------------------
+# 7. App Compatibility — conservative app-facing defaults
+# -----------------------------------------------------------
+include device/phh/treble/vendor15/app_compat_mitigations.mk
