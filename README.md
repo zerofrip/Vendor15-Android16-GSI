@@ -1,139 +1,161 @@
 # Android 16 GSI Builder for Android 15 Vendors
 
-This project provides a set of scripts and patches to build an **Android 16 Generic System Image (GSI)** capable of running on devices with **Android 15 Vendor** implementations.
+> **AIDL-only** — This GSI targets Android 15 vendors with AIDL HAL implementations.
+> HIDL-only vendor partitions (pre-Android 13) are **not supported**.
+
+This project builds an **Android 16 Generic System Image (GSI)** that boots on
+devices with **Android 15 Vendor** partitions. It includes survival mode (upgrade-only
+enforcement, cache sanitation), VINTF bypass patches, and a frozen compatibility
+matrix — all designed to maximize boot reliability across diverse vendors.
 
 ## Prerequisites
 
-- **Disk Space**: Building AOSP requires 300GB+ of free space.
-- **RAM**: 32GB+ recommended (16GB minimum with swap).
-- **OS**: Ubuntu 22.04 LTS or newer (or equivalent Linux distribution).
+- **Disk Space**: 300GB+ free
+- **RAM**: 32GB+ recommended (16GB minimum with swap)
+- **OS**: Ubuntu 22.04 LTS or newer
 
 ## Project Structure
 
 ```
 Vendor15-Android16-GSI/
-├── README.md                           # This file
-├── build.sh                            # Main build script with VNDK compat flags
-├── .github/                            # GitHub Actions CI/CD configuration
+├── build.sh                            # Main build script
+├── compatibility_matrix_vendor15_frozen.xml  # Frozen FCM (all HALs optional, AIDL-only)
+├── gsi_survival.rc                     # Init script: upgrade-only boot gate
+├── gsi_survival_check.sh               # SDK comparison + cache sanitation
+├── vendor15_survival.mk                # Build integration for survival mode
+├── .github/
 │   └── workflows/
 │       └── build_gsi.yml               # Self-hosted runner workflow
-├── compatibility_matrix_vendor15_frozen.xml  # Frozen FCM for Vendor15 HALs
-├── gsi_survival.rc                     # Init script: upgrade-only boot gate
-├── gsi_survival_check.sh               # Boot gate: SDK comparison + cache wipe
-├── vendor15_survival.mk                # Build integration for survival mode
 ├── build/
 │   └── make/
 │       ├── core/
-│       │   └── vndk_compat.mk          # Build system integration
+│       │   └── vndk_compat.mk          # VNDK compat build integration
 │       └── tools/
 │           └── vndk_compat/            # VNDK Compatibility Engine (Python)
-│               ├── Android.bp          # Blueprint for host tools
-│               ├── models/             # API model JSON files (see README)
+│               ├── Android.bp
+│               ├── models/             # API model JSON files
 │               ├── policies/           # Compat policies (v15)
 │               ├── vndk_compat_engine.py
 │               ├── vndk_diff_engine.py
 │               ├── scoring_system.py
 │               ├── shim_generator.py
-│               ├── linker_ir.py
-│               └── ...
+│               └── linker_ir.py
 ├── docs/
-│   └── VENDOR15_LIFETIME_EXTENSION_ARCHITECTURE.md  # Design reference
-├── patches/                            # Mandatory patches to AOSP source tree
-│   ├── build/make/                     # Framework integration patches
-│   ├── device/phh/treble/              # Survival mode inclusion patch
-│   ├── frameworks/base/                # VINTF bypass patches
+│   └── VENDOR15_LIFETIME_EXTENSION_ARCHITECTURE.md
+├── patches/                            # AOSP source tree patches
+│   ├── build/make/                     # Framework integration
+│   ├── device/phh/treble/              # Survival mode inclusion
+│   ├── frameworks/base/                # VINTF bypass
 │   └── system/core/                    # Init VINTF check bypass
-├── scripts/                            # Helper scripts
+├── scripts/
 │   ├── apply_patches.sh                # Applies patches to AOSP tree
 │   ├── validate_patches.sh             # Pre-build patch dry-run validator
 │   └── verify_survival.sh             # Post-build survival mode verification
-└── trebledroid/                        # TrebleDroid Submodules
+└── trebledroid/                        # TrebleDroid submodules
     ├── device_phh_treble/
     ├── vendor_hardware_overlay/
     └── treble_app/
 ```
 
-## Features
+## Vendor Compatibility
 
-- **TrebleDroid Integration**: Includes `device_phh_treble`, `vendor_hardware_overlay`, and `treble_app` as submodules for maximum compatibility.
-- **Automated Patching**: Applies critical patches for Android 15 vendor compatibility.
-- **Make Generation**: Automatically runs `generate.sh` to create GSI build targets.
+### Supported Vendors (AIDL-Only)
 
-## How to use
+| Vendor Type | Supported | Notes |
+|-------------|-----------|-------|
+| Android 15 with AIDL HALs | ✅ Yes | Primary target |
+| Android 14 with AIDL HALs | ✅ Likely | Most A14 vendors have AIDL |
+| Android 13 with AIDL HALs | ⚠️ Possible | May lack newer AIDL versions |
+| Pre-A13 (HIDL-only) | ❌ No | Not supported — too many breaking changes |
+
+### Why AIDL-Only?
+
+- **Boot reliability**: Eliminates dual-transport complexity (no hwbinder cross-domain SELinux)
+- **Single IPC path**: All HAL communication uses binder, not binder+hwbinder
+- **Forward-compatible**: Android 17+ will drop HIDL entirely
+- **Reduced failure surface**: No HIDL→AIDL adapters, no hwservicemanager timing races
+
+### HAL Requirements
+
+All HALs in the frozen compatibility matrix are marked `optional="true"`.
+Missing vendor HALs degrade gracefully — they do not block boot.
+
+## Survival Mode
+
+The GSI includes a **survival mode** system that:
+
+1. **Upgrade-only enforcement** — Prevents SDK downgrades that would corrupt userdata
+2. **Cache sanitation** — Clears dalvik-cache, resource-cache, and package_cache on SDK upgrades
+3. **VINTF bypass** — Freezes the compatibility matrix against Vendor15 HAL versions
+4. **Rescue Party suppression** — Prevents factory reset on repeated framework crashes
+
+### Boot Gate Flow
+
+```
+post-fs-data
+  └─ gsi_survival_check.sh
+       ├─ first_boot  → record SDK baseline, continue
+       ├─ normal      → same SDK, continue
+       ├─ upgrade     → clear caches, update baseline, continue
+       └─ downgrade   → HALT, log fatal, reboot
+```
+
+### Boot Safety Properties
+
+- No `seclabel` — runs in init's universal context (works on all SELinux policies)
+- No `class` membership — not part of core/main/hal (failure is invisible to boot)
+- No `exec` shell blocks — all triggers use native init builtins
+- Fail-open — errors default to "continue boot"
+
+## How to Build
 
 ### Local Build
 
-1. Ensure you have `repo` installed and configured.
-2. Run the build script:
-    ```bash
-    ./build.sh
-    ```
-    This will:
-    - Initialize the AOSP repository (Android 16).
-    - Sync the source code.
-    - Apply necessary patches for vendor compatibility.
-    - Build the GSI system image.
+```bash
+./build.sh
+```
+
+This will:
+1. Initialize the AOSP repository (Android 16)
+2. Sync the source code
+3. Apply patches for vendor compatibility
+4. Build the GSI system image
+5. Run post-build survival mode verification
 
 ### GitHub Actions (Self-Hosted Runner)
 
-The workflow in `.github/workflows/build_gsi.yml` is **specifically configured for a Self-Hosted Runner**.
-Standard GitHub-hosted runners (ubuntu-latest) do not have enough disk space (only ~14GB free) to build AOSP (requires 300GB+).
+> Standard GitHub-hosted runners do not have enough disk space.
+> A self-hosted runner with **300GB+ free** is required.
 
-**Setup Instructions:**
-1.  Go to your GitHub Repository -> Settings -> Actions -> Runners.
-2.  Click "New self-hosted runner".
-3.  Follow the instructions to install the runner agent on your build server (e.g., a powerful Linux machine/VPS).
-4.  Ensure the runner has at least **300GB of free disk space**.
-5.  Start the runner. The workflow will automatically pick it up via `runs-on: self-hosted`.
+1. Go to Repository → Settings → Actions → Runners
+2. Click "New self-hosted runner"
+3. Install the runner agent on your build server
+4. The workflow runs via `runs-on: self-hosted`
 
-**Workflow Features:**
-- **Cleanup**: The workflow includes steps to clean `out/` before and after builds to prevent disk usage from growing indefinitely.
-- **Persistence**: It reuses the `.repo` directory for faster syncs on subsequent runs.
+## VNDK Compatibility Engine
 
-## Advanced VNDK Compatibility Framework (A16 GSI -> A15 Vendor)
+Located in `build/make/tools/vndk_compat/`. Activated via:
 
-This project now includes a senior-architect level compatibility engine located in `build/make/tools/vndk_compat/`.
-
-### Key Components:
-- **API Model Generator**: Extracts symbol-level contracts from system libraries.
-- **Advanced Diff Engine**: Compares vendor requirements against system provisions using declarative policies.
-- **Compatibility Scorer**: Provides a numeric health metric (`ro.vndk.compat_score`) for the build.
-- **Linker IR**: A graph-based representation of linker namespaces to ensure strict Treble isolation.
-
-### Configuration
-The framework is activated via environment variables in `build.sh`:
 ```bash
 export TARGET_ENABLE_VNDK_COMPAT=true
 export TARGET_VENDOR_API_LEVEL=15
 export TARGET_SYSTEM_API_LEVEL=16
 ```
 
-## Compatibility Notes
-
-### Advanced VNDK Compatibility (A16+)
-Unlike legacy "VNDK Injection", this framework uses **Symbol Shimming** and **Deterministic Build-time Disqualification**. 
-- If a symbol is missing but safe to shim, a forwarding shim is generated.
-- If a HAL is incompatible, the **Framework Compatibility Matrix (FCM)** is updated at build-time to disqualifiy the feature, ensuring CTS integrity.
-- **VNDK Snapshot Fallback**: Automatically falls back to VNDK v35 snapshots if a stable ABI break is detected.
-
-### Android 15 Vendor on Android 16 GSI
-Android 15 deprecated the **VNDK (Vendor Native Development Kit)**. This means Android 16 system images do not include VNDK libraries by default.
-- **Modern Vendors**: If your Android 15 vendor partition is fully compliant with the new architecture (libs in `/vendor`), it should work out of the box.
-- **Legacy Vendors**: If your vendor partition expects VNDK libraries in `/system`, you might face missing symbol errors.
-    - **Note**: The `old-vndk` variant (`treble_arm64_byN`) in `device_phh_treble` targets API 28/29 (Android 9/10) and is **not** suitable for Android 15 vendors.
-
-### Using Android 15 Source Code
-If you have access to the **Android 15 source code** for your device, you can improve compatibility by:
-1.  **Building Missing HALs**: If specific hardware features (Camera, Sensors) break, you can compile the relevant HALs from source and include them in the build (or overlay them).
-2.  **Debugging**: Use the source to trace symbol errors.
-3.  **VNDK Injection**: If absolutely necessary, you can build the required shared libraries from the Android 15 source and manually add them to the GSI `system/lib64` (though this is "dirty" and discouraged in modern Treble).
+Components:
+- **API Model Generator** — Extracts symbol-level contracts from system libraries
+- **Diff Engine** — Compares vendor requirements vs. system provisions
+- **Scoring System** — Numeric health metric (`ro.vndk.compat_score`)
+- **Shim Generator** — Creates forwarding shims for safe-to-shim symbols
+- **Linker IR** — Graph-based linker namespace isolation
 
 ## Patches
 
-The `patches/` directory contains modifications to AOSP sources:
-- **Build System (`build/make`)**: Integrates the VNDK compatibility framework into the main build flow.
-- **VINTF Checks (`system/core`)**: Disables low-level VINTF version enforcement for initial boot stability.
-- **Legacy Support (`frameworks/base`)**: Adjustments for mismatched vendor HAL expectations.
+| Directory | Purpose |
+|-----------|---------|
+| `build/make/` | VNDK compat framework integration |
+| `device/phh/treble/` | Survival mode inclusion in base.mk |
+| `frameworks/base/` | VINTF enforcement bypass in VintfObject |
+| `system/core/` | Init-level VINTF check bypass |
 
----
-**Note**: The Advanced VNDK Compatibility Framework is intended to eventually replace the "Brute Force" VINTF disablement patches by using deterministic feature disqualification.
+Use `scripts/validate_patches.sh` to verify patches still apply cleanly before building.
