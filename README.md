@@ -202,52 +202,109 @@ post-fs-data
 ## How to Build
 
 ```bash
-./build.sh
+./build.sh                    # Default: enforcing, no extras
+./build.sh --dynamic          # + Dynamic partition support
+./build.sh --vndklite         # + VNDK-Lite linker relaxation
+./build.sh --selinux-minimal  # + Minimal SELinux compat overlay (6 rules)
+./build.sh --selinux-hal      # + Full HAL SELinux relaxation (52 rules)
+./build.sh --selinux-permissive  # ⚠ UNSAFE: permissive mode
+
+# Combine flags:
+./build.sh --dynamic --vndklite --selinux-hal
 ```
+
+### Build Flags
+
+| Flag | Default | Risk | Effect |
+|------|:-------:|:----:|--------|
+| `--dynamic` | OFF | Low | Includes dynamic partition build flags |
+| `--vndklite` | OFF | Med | VNDK linker namespace relaxation |
+| `--selinux-minimal` | OFF | Low | Enforcing + survival script compat rules |
+| `--selinux-hal` | OFF | Med | Enforcing + all HAL cross-domain rules |
+| `--selinux-permissive` | OFF | **High** | Permissive mode (debug only, never ship) |
+| `--selinux-debug` | OFF | **High** | Permissive + AVC logging |
+
+> **Note**: Dynamic partition detection (`dynamic_partition_detect.sh`) is always installed regardless of `--dynamic`. The flag only controls `PRODUCT_USE_DYNAMIC_PARTITIONS` and board-level flags.
 
 This will:
 1. Initialize the AOSP repository (Android 16)
 2. Sync the source code
 3. Set up TrebleDroid device tree
-4. Stage all survival mode files (boot safety, GPU, HAL, app compat, forward compat)
+4. Stage all survival mode files (7-layer chain + optional modules)
 5. Apply all patches (VINTF bypass + HIDL removal + survival mode)
 6. Build the GSI system image
-7. Run post-build survival mode verification
+7. Run post-build survival mode verification (30 checks)
 
 ### GitHub Actions (Self-Hosted Runner)
 
 > A self-hosted runner with **300GB+ free** is required.
+
+## Developer CLI
+
+```bash
+# Install: add tools/ to PATH or use direct path
+bash tools/vendor15-cli.sh <command>
+
+# Device status (shows all 7 chain props + HAL probes)
+vendor15-cli.sh status
+
+# Runtime HAL probing (push + run on device)
+vendor15-cli.sh probe
+
+# Diagnostics collection (JSON telemetry via logcat)
+vendor15-cli.sh diagnose
+
+# Generate optimized compatibility matrix
+vendor15-cli.sh generate-matrix --from-device <upstream_matrix.xml>
+
+# Generate mapper shim source
+vendor15-cli.sh generate-shim 4 5 ./output
+
+# Run survival test harness
+vendor15-cli.sh test
+
+# Dynamic partition flashing instructions
+bash scripts/dynamic_partition_prepare.sh [system.img]
+
+# SELinux AVC denial parser (generates suggested rules)
+bash scripts/parse_avc_denials.sh
+```
 
 ## Verification Scripts
 
 | Script | When to Run | What it Checks |
 |--------|-------------|----------------|
 | `verify_aidl_only.sh` | After patches | No hwbinder, no HIDL, no mandatory HALs |
-| `verify_survival.sh` | After building | Survival files installed, properties set |
+| `verify_survival.sh` | After building | 30 checks: all files, chain integrity, props |
 | `validate_patches.sh` | Before building | All patches apply cleanly |
 
 ## Diagnostic Commands
 
 ```bash
-# Check mitigation status
-adb shell getprop sys.gsi.all_mitigations_done        # Should be 1
-adb shell getprop sys.gsi.boot_safety_done             # Should be 1
-adb shell getprop sys.gsi.gpu_stability_done           # Should be 1
-adb shell getprop sys.gsi.hal_mitigations_done         # Should be 1
-adb shell getprop sys.gsi.app_compat_done              # Should be 1
-adb shell getprop sys.gsi.forward_compat_done          # Should be 1
+# Mitigation chain status (7 layers)
+adb shell getprop sys.gsi.boot_safety_done        # Layer 1
+adb shell getprop sys.gsi.gpu_stability_done       # Layer 2
+adb shell getprop sys.gsi.hal_mitigations_done     # Layer 3
+adb shell getprop sys.gsi.app_compat_done          # Layer 4
+adb shell getprop sys.gsi.forward_compat_done      # Layer 5
+adb shell getprop sys.gsi.hal_probe_done           # Layer 6
+adb shell getprop sys.gsi.diagnostics_done         # Layer 7
+adb shell getprop sys.gsi.all_mitigations_done     # Chain complete
 
-# Check VINTF status
-adb shell getprop ro.vintf.enforce                     # Should be false
+# HAL probe results
+adb shell "getprop | grep sys.gsi.probe"
 
-# Check GPU vendor detection
-adb shell getprop sys.gsi.gpu_vendor                   # adreno/mali/powervr/etc
+# Dynamic partition detection
+adb shell getprop sys.gsi.dp.detected
+adb shell getprop sys.gsi.dp.slot_scheme
 
-# Check for crash loops
-adb shell "dumpsys dropbox --print 2>/dev/null | grep -c system_server"
+# VNDK mismatch detection
+adb shell getprop sys.gsi.vndk.mismatch
 
-# Check SELinux
-adb shell getenforce
+# VINTF / GPU / SELinux
+adb shell getprop ro.vintf.enforce                 # Should be false
+adb shell getprop sys.gsi.gpu_vendor               # adreno/mali/powervr
+adb shell getenforce                               # Should be Enforcing
 ```
 
 ## Patches

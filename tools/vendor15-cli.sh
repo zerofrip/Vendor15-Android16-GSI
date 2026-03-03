@@ -15,6 +15,9 @@
 #   diagnose          Run diagnostics on connected device
 #   test              Run survival test harness on device
 #   probe             Run HAL capability probes on device
+#   dp-detect         Run dynamic partition detection on device
+#   avc-parse         Parse AVC denials and suggest SELinux rules
+#   vndk-check        Check VNDK version mismatch on device
 #   scaffold          Generate project directory layout
 #   status            Show current device survival status
 #   help              Show this help message
@@ -64,6 +67,16 @@ usage() {
     echo ""
     echo "  probe"
     echo "      Push and run HAL probes on connected device."
+    echo ""
+    echo "  dp-detect"
+    echo "      Run dynamic partition detection on connected device."
+    echo ""
+    echo "  avc-parse [logfile]"
+    echo "      Parse AVC denials and generate suggested SELinux rules."
+    echo "      Uses live device if no logfile specified."
+    echo ""
+    echo "  vndk-check"
+    echo "      Check VNDK version mismatch on connected device."
     echo ""
     echo "  scaffold <output_dir>"
     echo "      Generate complete project directory layout with templates."
@@ -405,6 +418,87 @@ cmd_status() {
 }
 
 # ============================================================
+# Command: dp-detect
+# ============================================================
+cmd_dp_detect() {
+    banner
+    echo "=== Dynamic Partition Detection ==="
+    echo ""
+
+    if ! $ADB devices 2>/dev/null | grep -q "device$"; then
+        echo -e "${RED}Error: No device connected via adb.${NC}"
+        exit 2
+    fi
+
+    echo "Pushing detection script to device..."
+    $ADB push "$PROJECT_ROOT/scripts/dynamic_partition_detect.sh" \
+        /data/local/tmp/dynamic_partition_detect.sh 2>/dev/null
+
+    echo "Running detection..."
+    $ADB shell "chmod 755 /data/local/tmp/dynamic_partition_detect.sh && \
+        sh /data/local/tmp/dynamic_partition_detect.sh" 2>/dev/null
+
+    echo ""
+    echo "=== Detection Results ==="
+    for prop in sys.gsi.dp.detected sys.gsi.dp.slot_scheme sys.gsi.dp.retrofit \
+                sys.gsi.dp.super_device sys.gsi.dp.super_size_mb sys.gsi.dp.partitions; do
+        local val=$($ADB shell getprop "$prop" 2>/dev/null | tr -d '\r')
+        printf "  %-30s %s\n" "$prop" "${val:-(not set)}"
+    done
+
+    echo ""
+    echo "For flashing instructions, run:"
+    echo "  bash scripts/dynamic_partition_prepare.sh"
+}
+
+# ============================================================
+# Command: avc-parse
+# ============================================================
+cmd_avc_parse() {
+    banner
+    bash "$PROJECT_ROOT/scripts/parse_avc_denials.sh" "$@"
+}
+
+# ============================================================
+# Command: vndk-check
+# ============================================================
+cmd_vndk_check() {
+    banner
+    echo "=== VNDK Version Mismatch Check ==="
+    echo ""
+
+    if ! $ADB devices 2>/dev/null | grep -q "device$"; then
+        echo -e "${RED}Error: No device connected via adb.${NC}"
+        exit 2
+    fi
+
+    echo "Pushing detection script to device..."
+    $ADB push "$PROJECT_ROOT/vndklite/vndklite_detect.sh" \
+        /data/local/tmp/vndklite_detect.sh 2>/dev/null
+
+    echo "Running VNDK detection..."
+    $ADB shell "chmod 755 /data/local/tmp/vndklite_detect.sh && \
+        sh /data/local/tmp/vndklite_detect.sh" 2>/dev/null
+
+    echo ""
+    echo "=== VNDK Results ==="
+    for prop in sys.gsi.vndk.system_version sys.gsi.vndk.vendor_version \
+                sys.gsi.vndk.mismatch sys.gsi.vndk.version_delta; do
+        local val=$($ADB shell getprop "$prop" 2>/dev/null | tr -d '\r')
+        printf "  %-35s %s\n" "$prop" "${val:-(not set)}"
+    done
+
+    local mismatch=$($ADB shell getprop sys.gsi.vndk.mismatch 2>/dev/null | tr -d '\r')
+    echo ""
+    if [ "$mismatch" = "true" ]; then
+        echo -e "${YELLOW}VNDK mismatch detected.${NC}"
+        echo "  Consider building with: ./build.sh --vndklite"
+    else
+        echo -e "${GREEN}VNDK versions match. No action needed.${NC}"
+    fi
+}
+
+# ============================================================
 # Main dispatch
 # ============================================================
 COMMAND="${1:-help}"
@@ -416,6 +510,9 @@ case "$COMMAND" in
     diagnose)           cmd_diagnose "$@" ;;
     test)               cmd_test "$@" ;;
     probe)              cmd_probe "$@" ;;
+    dp-detect)          cmd_dp_detect "$@" ;;
+    avc-parse)          cmd_avc_parse "$@" ;;
+    vndk-check)         cmd_vndk_check "$@" ;;
     scaffold)           cmd_scaffold "$@" ;;
     status)             cmd_status "$@" ;;
     help|--help|-h)     usage ;;
