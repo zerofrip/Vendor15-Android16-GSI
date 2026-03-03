@@ -1,0 +1,48 @@
+# ============================================================
+# minimal_compat.te
+# SELinux — Minimal Compatibility Overlay for Vendor15 GSI
+# ============================================================
+#
+# Purpose:
+#   Allow survival mode scripts to function under enforcing
+#   SELinux. These rules cover only the bare minimum needed
+#   for the boot chain scripts to execute.
+#
+# Risks:
+#   LOW — Only allows init-context scripts to write kmsg and
+#   set system properties, which they already do in permissive.
+#
+# When to enable:
+#   Always, when running SELinux enforcing with survival mode.
+#   This is the DEFAULT overlay applied with --selinux-minimal.
+#
+# Corresponding build flag: --selinux-minimal
+# ============================================================
+
+# --- Survival scripts write to /dev/kmsg for diagnostics ---
+# The boot chain scripts (boot_safety.sh, gpu_stability.sh, etc.)
+# log to kmsg via echo > /dev/kmsg. In init context this is
+# normally permitted, but some vendor kernels restrict it.
+allow init kmsg_device:chr_file { write open };
+
+# --- Survival scripts read vendor manifest files ---
+# Scripts like forward_compat.sh and hal_probe.sh need to read
+# /vendor/etc/vintf/manifest.xml to detect HAL versions.
+allow init vendor_configs_file:dir { search open read };
+allow init vendor_configs_file:file { read open getattr };
+
+# --- Survival scripts read /proc/uptime for boot timing ---
+allow init proc_uptime:file { read open };
+
+# --- Survival scripts use 'service check' for HAL probing ---
+# hal_probe.sh queries binder services via the 'service' command.
+allow init servicemanager:binder { call transfer };
+allow init hwservicemanager:binder { call transfer };
+
+# --- Property writes from survival scripts ---
+# All scripts set sys.gsi.* properties via setprop.
+# These are normally allowed for init, but some vendor sepolicy
+# restricts property_set for custom prefixes.
+# (Uses AOSP property type if available, otherwise falls back)
+# type gsi_prop, property_type;
+# set_prop(init, gsi_prop)

@@ -1,0 +1,59 @@
+# ============================================================
+# hal_relax.te
+# SELinux — HAL Cross-Domain Access Relaxation
+# ============================================================
+#
+# Purpose:
+#   Allow vendor HAL processes to access system-side resources
+#   that they need when running under a newer framework.
+#   Android 16 framework may place files/sockets in locations
+#   that vendor15 HAL sepolicy doesn't anticipate.
+#
+# Risks:
+#   MEDIUM — Widens HAL process access. Each rule is scoped
+#   to specific HAL domains. Does NOT grant blanket access.
+#
+# When to enable:
+#   When vendor HALs are crashing with avc: denied in logcat.
+#   Apply with --selinux-hal flag.
+#
+# Corresponding build flag: --selinux-hal
+# ============================================================
+
+# --- Passthrough HAL loading from system partition ---
+# Vendor15 HALs may be loaded as same_process_hal into
+# system processes. The HAL .so needs to be readable.
+allow hal_graphics_mapper_default system_file:file { read open execute map getattr };
+allow hal_graphics_mapper_default system_lib_file:file { read open execute map getattr };
+
+# --- Composer HAL access to system gralloc ---
+# HWComposer needs to map buffers allocated by system-side gralloc
+allow hal_graphics_composer_default system_file:file { read open execute map };
+allow hal_graphics_composer_default gpu_device:chr_file { read write open ioctl };
+
+# --- Power HAL access to sysfs nodes ---
+# Vendor15 power HALs may need to read CPU frequency governors
+# that moved locations in kernel 6.x
+allow hal_power_default sysfs:file { read open getattr };
+allow hal_power_default sysfs:dir { search open read };
+allow hal_power_default sysfs_devices_system_cpu:file { read write open };
+
+# --- Sensor HAL access to iio devices ---
+# Some vendor sensor HALs access /dev/iio:deviceN which may
+# have different labels on A16 system
+allow hal_sensors_default device:chr_file { read write open ioctl };
+
+# --- Audio HAL access to audio devices ---
+# Vendor audio HAL may need access to device nodes that have
+# different SELinux labels in A16
+allow hal_audio_default audio_device:chr_file { read write open ioctl };
+allow hal_audio_default audio_device:dir { search };
+
+# --- Thermal HAL access to thermal zone sysfs ---
+allow hal_thermal_default sysfs_thermal:file { read open getattr };
+allow hal_thermal_default sysfs_thermal:dir { search open read };
+
+# --- Generic vendor HAL → system binder access ---
+# Some vendor HALs need to call system services via binder
+allow hal_bluetooth_default system_server:binder { call transfer };
+allow hal_vibrator_default system_server:binder { call transfer };

@@ -1,0 +1,44 @@
+# ============================================================
+# camera_relax.te
+# SELinux — Camera HAL Cross-Domain Relaxation
+# ============================================================
+#
+# Purpose:
+#   Allow vendor Camera HAL (CameraProvider) to function when
+#   A16 changes cameraserver socket/IPC paths.
+#
+# Risks:
+#   MEDIUM — Camera HAL gets access to GPU devices and shared
+#   memory for buffer handling. These are normal camera
+#   operations but cross domain boundaries.
+#
+# When to enable:
+#   When camera fails to open and logcat shows avc: denied
+#   for hal_camera_default or cameraserver.
+#
+# Corresponding build flag: --selinux-hal
+# ============================================================
+
+# --- Camera HAL → cameraserver binder ---
+allow hal_camera_default cameraserver:binder { call transfer };
+allow cameraserver hal_camera_default:binder { call transfer };
+
+# --- Camera HAL → GPU device access ---
+# Camera HAL uses GPU for image processing (ISP pipeline)
+allow hal_camera_default gpu_device:chr_file { read write open ioctl map };
+
+# --- Camera HAL → ion/dmabuf allocator ---
+# Buffer sharing between camera HAL and framework
+allow hal_camera_default dmabuf_system_heap_device:chr_file { read write open ioctl };
+allow hal_camera_default ion_device:chr_file { read write open ioctl };
+
+# --- Camera HAL → vendor data files ---
+# Vendor camera HAL stores calibration and tuning data
+allow hal_camera_default vendor_data_file:dir { search read open };
+allow hal_camera_default vendor_data_file:file { read open getattr map };
+
+# --- Camera HAL → sysfs access for sensor control ---
+allow hal_camera_default sysfs:file { read write open getattr };
+
+# --- Camera HAL → mediacodec for hardware encoding ---
+allow hal_camera_default mediacodec:binder { call transfer };

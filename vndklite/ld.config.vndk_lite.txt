@@ -1,0 +1,87 @@
+# ============================================================
+# ld.config.vndk_lite.txt
+# Vendor15 GSI — Relaxed Linker Namespace Configuration
+# ============================================================
+#
+# This file provides a relaxed linker namespace that allows
+# vendor processes to load libraries from the system partition
+# when the VNDK snapshot for the vendor's version is missing.
+#
+# In standard VNDK, vendor processes are strictly isolated:
+# they can ONLY load from /vendor/lib64 and /system/lib64/vndk-XX.
+# VNDK-Lite relaxes this: vendor processes can ALSO load from
+# /system/lib64 as a fallback.
+#
+# Risks:
+#   - Symbol conflicts if vendor and system ship the same
+#     library with incompatible ABIs
+#   - Slightly increased attack surface (vendor code can reach
+#     more system libraries)
+#
+# When to enable:
+#   When vendor processes crash with "library not found" errors
+#   because the VNDK snapshot doesn't contain the needed library.
+#
+# This file is referenced by the linker when ro.vndk.lite=true.
+# ============================================================
+
+[vendor]
+# The vendor namespace — processes from /vendor partition
+
+# Standard search paths (vendor-first)
+namespace.default.search.paths  = /vendor/${LIB}
+namespace.default.search.paths += /vendor/${LIB}/hw
+namespace.default.search.paths += /vendor/${LIB}/egl
+
+# VNDK snapshot path (standard VNDK behavior)
+namespace.default.search.paths += /system/${LIB}/vndk-sp-${ro.vndk.version}
+namespace.default.search.paths += /system/${LIB}/vndk-${ro.vndk.version}
+
+# VNDK-Lite addition: fallback to system libs
+# This is the key relaxation — allows vendor processes to load
+# system libraries when they aren't in the VNDK snapshot.
+namespace.default.search.paths += /system/${LIB}
+namespace.default.search.paths += /system/${LIB}/hw
+namespace.default.search.paths += /system/product/${LIB}
+
+# APEX VNDK modules
+namespace.default.search.paths += /apex/com.android.vndk.v${ro.vndk.version}/${LIB}
+
+# Permitted paths (what the linker is allowed to load from)
+namespace.default.permitted.paths  = /vendor
+namespace.default.permitted.paths += /system/${LIB}
+namespace.default.permitted.paths += /system/product/${LIB}
+namespace.default.permitted.paths += /apex
+
+# Allow loading from system namespace as fallback
+namespace.default.links = system
+namespace.default.link.system.shared_libs = *
+
+[system]
+# System namespace — the default for system processes
+namespace.default.search.paths  = /system/${LIB}
+namespace.default.search.paths += /system/${LIB}/hw
+namespace.default.search.paths += /system/product/${LIB}
+
+namespace.default.permitted.paths  = /system
+namespace.default.permitted.paths += /apex
+
+# System can also reach vendor for passthrough HALs
+namespace.default.links = vendor
+namespace.default.link.vendor.shared_libs = *
+
+[vendor_sphal]
+# Same-process HAL namespace — HALs loaded into system processes
+# (e.g., gralloc mapper loaded by libui in SurfaceFlinger)
+
+namespace.default.search.paths  = /vendor/${LIB}/hw
+namespace.default.search.paths += /vendor/${LIB}/egl
+namespace.default.search.paths += /vendor/${LIB}
+
+# VNDK-Lite: also allow system lib fallback for SPHALs
+namespace.default.search.paths += /system/${LIB}/hw
+namespace.default.search.paths += /system/${LIB}
+
+namespace.default.permitted.paths  = /vendor
+namespace.default.permitted.paths += /system/${LIB}
+namespace.default.permitted.paths += /apex

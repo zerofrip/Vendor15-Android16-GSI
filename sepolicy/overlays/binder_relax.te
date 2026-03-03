@@ -1,0 +1,57 @@
+# ============================================================
+# binder_relax.te
+# SELinux — Cross-Domain Binder Relaxation
+# ============================================================
+#
+# Purpose:
+#   Allow vendor binder services to communicate with A16
+#   system services when domain boundaries have shifted.
+#   This is the broadest HAL relaxation and should only be
+#   used when specific per-HAL overlays are insufficient.
+#
+# Risks:
+#   HIGH — Allows many vendor domains to call system_server
+#   via binder. This widens the attack surface significantly.
+#   Use per-HAL overlays (hal_relax.te, wifi_relax.te, etc.)
+#   first. Only apply this if those are insufficient.
+#
+# When to enable:
+#   Last resort when many vendor services show binder denials.
+#   Apply with --selinux-hal flag (included as part of HAL set).
+#
+# Corresponding build flag: --selinux-hal
+# ============================================================
+
+# --- Vendor app domain → system_server ---
+# Some vendor apps (system_app context) need to call system
+# services that moved or changed interfaces in A16
+allow system_app system_server:binder { call transfer };
+
+# --- Vendor HAL domain → servicemanager ---
+# Vendor HALs need to register/lookup services with the
+# system-side servicemanager
+allow vendor_init servicemanager:binder { call transfer };
+
+# --- Generic vendor → system binder ---
+# Broad rule for vendor processes that need system binder
+# access. Each line is a specific vendor domain.
+allow hal_fingerprint_default system_server:binder { call transfer };
+allow hal_face_default system_server:binder { call transfer };
+allow hal_health_default system_server:binder { call transfer };
+allow hal_usb_default system_server:binder { call transfer };
+allow hal_gnss_default system_server:binder { call transfer };
+allow hal_nfc_default system_server:binder { call transfer };
+
+# --- Vendor init scripts → system properties ---
+# Vendor init.*.rc scripts may set properties that have new
+# SELinux labels in A16
+allow vendor_init system_prop:property_service set;
+allow vendor_init exported_system_prop:property_service set;
+
+# --- Allow hwbinder calls between vendor and system ---
+# Some vendor HALs still use hwbinder for IPC with the
+# system, even on AIDL-only systems (legacy passthrough)
+allow system_server hal_graphics_composer_default:binder { call transfer };
+allow system_server hal_power_default:binder { call transfer };
+allow surfaceflinger hal_graphics_composer_default:binder { call transfer };
+allow surfaceflinger hal_graphics_allocator_default:binder { call transfer };

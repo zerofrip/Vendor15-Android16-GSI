@@ -85,3 +85,9 @@ PRODUCT_COPY_FILES += \
     device/phh/treble/vendor15/gsi_diagnostics.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/gsi_diagnostics.rc \
     device/phh/treble/vendor15/survival_diagnostics.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/survival_diagnostics.sh
 
+# -----------------------------------------------------------
+# 12. Dynamic Partition Support
+#     Tier 1 (detection + property) is always included.
+#     Tier 2 (board flags) only with --dynamic (ENABLE_DYNAMIC_PARTITIONS=1)
+# -----------------------------------------------------------
+-include device/phh/treble/vendor15/dynamic_partitions.mk

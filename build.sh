@@ -52,9 +52,55 @@ CCACHE_DIR="${CCACHE_DIR:-$HOME/.ccache}"
 ANDROID_SRC="${ANDROID_SRC:-}"
 TREBLEDROID_SRC="${TREBLEDROID_SRC:-}"
 
+# ======================== Modular Feature Flags ========================
+# All features are OFF by default. Enable via CLI flags.
+ENABLE_DYNAMIC_PARTITIONS=0     # --dynamic
+ENABLE_VNDKLITE=0               # --vndklite
+SELINUX_MODE="enforcing"        # --selinux-minimal, --selinux-hal,
+                                 # --selinux-permissive, --selinux-debug
+SELINUX_OVERLAY="none"          # Computed from SELINUX_MODE
+
+# Parse CLI flags
+for arg in "$@"; do
+    case "$arg" in
+        --dynamic)
+            ENABLE_DYNAMIC_PARTITIONS=1
+            ;;
+        --vndklite)
+            ENABLE_VNDKLITE=1
+            ;;
+        --selinux-minimal)
+            SELINUX_MODE="enforcing"
+            SELINUX_OVERLAY="minimal"
+            ;;
+        --selinux-hal)
+            SELINUX_MODE="enforcing"
+            SELINUX_OVERLAY="hal"
+            ;;
+        --selinux-permissive)
+            SELINUX_MODE="permissive"
+            SELINUX_OVERLAY="none"
+            echo "  ⚠  WARNING: SELinux PERMISSIVE mode requested (UNSAFE)"
+            ;;
+        --selinux-debug)
+            SELINUX_MODE="permissive"
+            SELINUX_OVERLAY="none"
+            echo "  ⚠  WARNING: SELinux DEBUG mode (permissive + logging)"
+            ;;
+    esac
+done
+
 echo "=== Android $ANDROID_MAJOR_VERSION GSI Builder ==="
 echo "Work Directory: $WORK_DIR"
 echo "Lunch Target : $LUNCH_TARGET"
+if [ "$ENABLE_DYNAMIC_PARTITIONS" = "1" ]; then
+    echo "Dynamic Partitions: ENABLED"
+    export ENABLE_DYNAMIC_PARTITIONS
+fi
+if [ "$ENABLE_VNDKLITE" = "1" ]; then
+    echo "VNDK-Lite: ENABLED"
+fi
+echo "SELinux: $SELINUX_MODE (overlay: $SELINUX_OVERLAY)"
 echo ""
 
 # ======================== VNDK Compat =========================
@@ -444,6 +490,71 @@ cp -v "$WORK_DIR/gsi_diagnostics.rc" \
       "$SURVIVAL_DIR/gsi_diagnostics.rc"
 
 echo "Diagnostics files staged to $SURVIVAL_DIR"
+
+# --- Conditional: Dynamic Partition files ---
+if [ "$ENABLE_DYNAMIC_PARTITIONS" = "1" ]; then
+    echo ""
+    echo "--- Staging Dynamic Partition Files ---"
+
+    cp -v "$WORK_DIR/scripts/dynamic_partition_detect.sh" \
+          "$SURVIVAL_DIR/dynamic_partition_detect.sh"
+    chmod 755 "$SURVIVAL_DIR/dynamic_partition_detect.sh"
+
+    cp -v "$WORK_DIR/dynamic_partitions.mk" \
+          "$SURVIVAL_DIR/dynamic_partitions.mk"
+
+    echo "Dynamic partition files staged to $SURVIVAL_DIR"
+fi
+
+# --- Conditional: SELinux overlay files ---
+if [ "$SELINUX_OVERLAY" != "none" ]; then
+    echo ""
+    echo "--- Staging SELinux Overlay Files ---"
+
+    mkdir -p "$SURVIVAL_DIR/sepolicy_overlays"
+    if [ "$SELINUX_OVERLAY" = "minimal" ] || [ "$SELINUX_OVERLAY" = "hal" ]; then
+        cp -v "$WORK_DIR/sepolicy/overlays/minimal_compat.te" \
+              "$SURVIVAL_DIR/sepolicy_overlays/"
+    fi
+    if [ "$SELINUX_OVERLAY" = "hal" ]; then
+        for te in hal_relax.te wifi_relax.te camera_relax.te binder_relax.te; do
+            cp -v "$WORK_DIR/sepolicy/overlays/$te" \
+                  "$SURVIVAL_DIR/sepolicy_overlays/"
+        done
+    fi
+
+    echo "SELinux overlays staged to $SURVIVAL_DIR/sepolicy_overlays/"
+fi
+
+# --- Conditional: VNDK-Lite files ---
+if [ "$ENABLE_VNDKLITE" = "1" ]; then
+    echo ""
+    echo "--- Staging VNDK-Lite Files ---"
+
+    cp -v "$WORK_DIR/vndklite/vndklite_detect.sh" \
+          "$SURVIVAL_DIR/vndklite_detect.sh"
+    chmod 755 "$SURVIVAL_DIR/vndklite_detect.sh"
+
+    cp -v "$WORK_DIR/vndklite/vndklite_apply.sh" \
+          "$SURVIVAL_DIR/vndklite_apply.sh"
+    chmod 755 "$SURVIVAL_DIR/vndklite_apply.sh"
+
+    cp -v "$WORK_DIR/vndklite/vndklite.mk" \
+          "$SURVIVAL_DIR/vndklite.mk"
+
+    cp -v "$WORK_DIR/vndklite/ld.config.vndk_lite.txt" \
+          "$SURVIVAL_DIR/ld.config.vndk_lite.txt"
+
+    echo "VNDK-Lite files staged to $SURVIVAL_DIR"
+fi
+
+# --- Conditional: SELinux mode in build ---
+if [ "$SELINUX_MODE" = "permissive" ]; then
+    echo ""
+    echo "--- Setting SELinux to PERMISSIVE ---"
+    echo "  ⚠  This is UNSAFE and disables SELinux enforcement"
+    export BOARD_KERNEL_CMDLINE="${BOARD_KERNEL_CMDLINE:-} androidboot.selinux=permissive"
+fi
 
 
 # ============================================================

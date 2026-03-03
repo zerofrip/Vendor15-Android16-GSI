@@ -1,0 +1,44 @@
+# ============================================================
+# wifi_relax.te
+# SELinux — WiFi HAL Cross-Domain Relaxation
+# ============================================================
+#
+# Purpose:
+#   Allow vendor WiFi HAL and wpa_supplicant to function when
+#   A16 framework changes socket/file locations or labels.
+#
+# Risks:
+#   MEDIUM — Grants WiFi processes access to network control
+#   sockets that may have moved between vendor15 and system16.
+#
+# When to enable:
+#   When WiFi fails to initialize and logcat shows avc: denied
+#   for hal_wifi_default or wpa domains.
+#
+# Corresponding build flag: --selinux-hal
+# ============================================================
+
+# --- wpa_supplicant socket access ---
+# A16 may change the wpa_supplicant control socket path
+# or its SELinux label
+allow hal_wifi_default wpa_socket:dir { search write add_name remove_name };
+allow hal_wifi_default wpa_socket:sock_file { write create unlink setattr };
+
+# --- wpa_supplicant config file access ---
+allow wpa hal_wifi_default:unix_dgram_socket { sendto };
+allow wpa wifi_data_file:dir { search write add_name };
+allow wpa wifi_data_file:file { create write open read getattr setattr };
+
+# --- WiFi HAL → system_server binder ---
+allow hal_wifi_default system_server:binder { call transfer };
+
+# --- WiFi HAL → netd socket ---
+# WiFi HAL may need to configure network interfaces via netd
+allow hal_wifi_default netd:unix_stream_socket { connectto };
+
+# --- WiFi firmware loading ---
+# Vendor WiFi drivers load firmware from /vendor/firmware
+# which should already be accessible, but some A16 changes
+# may relabel these paths
+allow hal_wifi_default vendor_firmware_file:dir { search open read };
+allow hal_wifi_default vendor_firmware_file:file { read open getattr };

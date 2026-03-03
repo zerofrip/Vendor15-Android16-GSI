@@ -41,6 +41,7 @@ Vendor15-GSI/
 ├── survival_diagnostics.sh / gsi_diagnostics.rc  # Layer 7: boot telemetry
 │
 ├── # ── Supporting Infrastructure ──
+├── dynamic_partitions.mk                    # Build config for --dynamic flag
 ├── .github/workflows/
 │   ├── build_gsi.yml                        # CI: GSI build (self-hosted runner)
 │   └── survival_test.yml                    # CI: static + runtime validation
@@ -62,11 +63,21 @@ Vendor15-GSI/
 │   └── system/core/                         # Init VINTF bypass
 ├── scripts/
 │   ├── apply_patches.sh
+│   ├── apply_sepolicy_overlays.sh           # SELinux overlay applicator
+│   ├── dynamic_partition_detect.sh          # On-device DP detection
+│   ├── dynamic_partition_prepare.sh         # Host-side flashing instructions
+│   ├── parse_avc_denials.sh                 # AVC denial parser + rule suggester
 │   ├── validate_patches.sh
 │   ├── verify_aidl_only.sh
-│   └── verify_survival.sh
+│   └── verify_survival.sh                  # Post-build verification (30 checks)
 ├── sepolicy/
-│   └── vendor15_survival.te                 # SELinux policy for survival mode
+│   ├── vendor15_survival.te                 # Base SELinux policy
+│   └── overlays/                            # Modular SELinux relaxations
+│       ├── minimal_compat.te                # Minimal survival compat (LOW risk)
+│       ├── hal_relax.te                     # HAL cross-domain (MED risk)
+│       ├── wifi_relax.te                    # WiFi HAL + wpa (MED risk)
+│       ├── camera_relax.te                  # Camera HAL (MED risk)
+│       └── binder_relax.te                  # Broad binder relaxation (HIGH risk)
 ├── tools/
 │   ├── vendor15-cli.sh                      # Developer CLI (diagnose, probe, status...)
 │   ├── diagnostics/survival_diagnostics.sh
@@ -74,6 +85,11 @@ Vendor15-GSI/
 │   ├── matrix_optimizer/optimize_matrix.py
 │   ├── shim_generator/generate_mapper_shim.py
 │   └── test_harness/survival_test.sh
+├── vndklite/                                # VNDK-Lite compatibility mode
+│   ├── vndklite_detect.sh                   # On-device VNDK mismatch detection
+│   ├── vndklite_apply.sh                    # Linker namespace relaxation
+│   ├── vndklite.mk                          # Build config for --vndklite flag
+│   └── ld.config.vndk_lite.txt              # Relaxed linker namespaces
 └── trebledroid/                             # TrebleDroid submodules
     ├── device_phh_treble/
     ├── vendor_hardware_overlay/
