@@ -419,6 +419,33 @@ cp -v "$WORK_DIR/forward_compat.mk" \
 
 echo "Forward compatibility files staged to $SURVIVAL_DIR"
 
+# --- HAL Probe files ---
+echo ""
+echo "--- Staging HAL Probe Files ---"
+
+cp -v "$WORK_DIR/hal_probe.sh" \
+      "$SURVIVAL_DIR/hal_probe.sh"
+chmod 755 "$SURVIVAL_DIR/hal_probe.sh"
+
+cp -v "$WORK_DIR/gsi_hal_probe.rc" \
+      "$SURVIVAL_DIR/gsi_hal_probe.rc"
+
+echo "HAL probe files staged to $SURVIVAL_DIR"
+
+# --- Diagnostics files ---
+echo ""
+echo "--- Staging Diagnostics Files ---"
+
+cp -v "$WORK_DIR/survival_diagnostics.sh" \
+      "$SURVIVAL_DIR/survival_diagnostics.sh"
+chmod 755 "$SURVIVAL_DIR/survival_diagnostics.sh"
+
+cp -v "$WORK_DIR/gsi_diagnostics.rc" \
+      "$SURVIVAL_DIR/gsi_diagnostics.rc"
+
+echo "Diagnostics files staged to $SURVIVAL_DIR"
+
+
 # ============================================================
 # 4. Apply Patches (unconditional)
 # ============================================================

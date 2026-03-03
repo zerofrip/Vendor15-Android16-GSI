@@ -1,5 +1,5 @@
 # ============================================================
-# gsi_forward_compat.rc — FIFTH (LAST) in chain
+# gsi_forward_compat.rc — FIFTH in chain
 # ============================================================
 
 service gsi_forward_compat /system/bin/sh /system/bin/forward_compat.sh
@@ -8,7 +8,8 @@ service gsi_forward_compat /system/bin/sh /system/bin/forward_compat.sh
     oneshot
     disabled
 
-# Final link — all mitigations complete
+# Chain: forward_compat → hal_probe
 on property:sys.gsi.forward_compat_done=1
-    write /dev/kmsg "GSI_FWDCOMPAT: All GSI mitigations applied."
-    setprop sys.gsi.all_mitigations_done 1
+    write /dev/kmsg "GSI_FWDCOMPAT: Forward compat done. Starting HAL probing."
+    start gsi_hal_probe
+

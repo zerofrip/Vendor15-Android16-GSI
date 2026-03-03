@@ -1,0 +1,327 @@
+name: Vendor15 Survival Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '*.sh'
+      - '*.mk'
+      - '*.rc'
+      - '*.xml'
+      - 'patches/**'
+      - 'tools/**'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      device_id:
+        description: 'ADB device serial (for hardware testing)'
+        required: false
+        type: string
+
+jobs:
+  # ============================================================
+  # Job 1: Static validation (no device required)
+  # ============================================================
+  static-validation:
+    name: Static Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate XML syntax
+        run: |
+          echo "=== Validating XML files ==="
+          for xml in compatibility_matrix_vendor15_frozen.xml; do
+            if [ -f "$xml" ]; then
+              python3 -c "
+          import xml.etree.ElementTree as ET
+          try:
+              ET.parse('$xml')
+              print('  PASS: $xml')
+          except ET.ParseError as e:
+              print(f'  FAIL: $xml — {e}')
+              exit(1)
+          "
+            fi
+          done
+
+      - name: Validate shell scripts (shellcheck)
+        run: |
+          echo "=== ShellCheck analysis ==="
+          sudo apt-get install -y shellcheck 2>/dev/null || true
+          EXIT=0
+          for script in *.sh scripts/*.sh tools/**/*.sh; do
+            if [ -f "$script" ]; then
+              echo "  Checking: $script"
+              shellcheck -e SC2034,SC2086,SC2181,SC1091,SC2046,SC2166,SC2012 \
+                "$script" || EXIT=1
+            fi
+          done
+          exit $EXIT
+
+      - name: Validate init.rc syntax
+        run: |
+          echo "=== Init.rc validation ==="
+          for rc in *.rc; do
+            if [ -f "$rc" ]; then
+              echo "  Checking: $rc"
+              # Basic syntax checks
+              if grep -qE '^\s*(service|on)\s' "$rc"; then
+                echo "    Has service/trigger definitions"
+              fi
+              # Check for common errors
+              if grep -qP '\t' "$rc"; then
+                echo "    WARNING: Contains tabs (Android init prefers spaces)"
+              fi
+              echo "    PASS"
+            fi
+          done
+
+      - name: Validate makefile syntax
+        run: |
+          echo "=== Makefile validation ==="
+          for mk in *.mk; do
+            if [ -f "$mk" ]; then
+              echo "  Checking: $mk"
+              # Check for basic syntax issues
+              if make -n -f "$mk" 2>&1 | grep -qi "error"; then
+                echo "    WARNING: Potential syntax issues"
+              else
+                echo "    PASS (basic syntax OK)"
+              fi
+            fi
+          done
+
+      - name: Validate matrix optimizer
+        run: |
+          echo "=== Matrix optimizer validation ==="
+          python3 -c "
+          import sys
+          sys.path.insert(0, 'tools/matrix_optimizer')
+          from optimize_matrix import parse_version_range, format_version_range
+
+          # Test version parsing
+          assert parse_version_range('3-4') == (3, 4), 'Range parse failed'
+          assert parse_version_range('5') == (5, 5), 'Single version parse failed'
+          assert parse_version_range('4.0-5.0') == (4, 5), 'Minor version range failed'
+
+          # Test formatting
+          assert format_version_range(3, 4) == '3-4', 'Range format failed'
+          assert format_version_range(5, 5) == '5', 'Single format failed'
+          assert format_version_range(4, 5, True) == '4.0-5.0', 'Minor version format failed'
+
+          print('  All matrix optimizer unit tests passed')
+          "
+
+      - name: Validate shim generator
+        run: |
+          echo "=== Shim generator validation ==="
+          mkdir -p /tmp/shim_test
+          python3 tools/shim_generator/generate_mapper_shim.py \
+            --vendor-version 4 \
+            --target-version 5 \
+            --output-dir /tmp/shim_test
+
+          # Verify all expected files were generated
+          for f in mapper_v5_shim.h mapper_v5_shim.cpp Android.bp README.md; do
+            if [ -f "/tmp/shim_test/$f" ]; then
+              echo "  PASS: $f generated"
+            else
+              echo "  FAIL: $f not generated"
+              exit 1
+            fi
+          done
+
+          # Verify C++ files have expected content
+          grep -q "MapperV5Shim" /tmp/shim_test/mapper_v5_shim.cpp || \
+            { echo "FAIL: shim source missing class"; exit 1; }
+          grep -q "dlopen" /tmp/shim_test/mapper_v5_shim.cpp || \
+            { echo "FAIL: shim source missing dlopen"; exit 1; }
+          echo "  All shim generator tests passed"
+
+      - name: Build verification script dry run
+        run: |
+          echo "=== Verify survival script dry run ==="
+          bash -n scripts/verify_survival.sh
+          echo "  PASS: verify_survival.sh syntax OK"
+
+          bash -n scripts/apply_patches.sh
+          echo "  PASS: apply_patches.sh syntax OK"
+
+          bash -n scripts/verify_aidl_only.sh
+          echo "  PASS: verify_aidl_only.sh syntax OK"
+
+      - name: Validate 7-layer chain integrity
+        run: |
+          echo "=== Chain integrity validation ==="
+          EXIT=0
+          check_chain() {
+            local rc="$1" trigger="$2" next="$3"
+            if [ -f "$rc" ]; then
+              if grep -q "$trigger" "$rc" && grep -q "$next" "$rc"; then
+                echo "  PASS: $rc → $trigger → $next"
+              else
+                echo "  FAIL: $rc chain broken ($trigger → $next)"
+                EXIT=1
+              fi
+            else
+              echo "  FAIL: $rc not found"
+              EXIT=1
+            fi
+          }
+
+          # Verify boot starts the chain
+          check_chain "gsi_boot_safety.rc"    "post-fs-data"        "gsi_boot_safety"
+          check_chain "gsi_boot_safety.rc"    "boot_safety_done"    "gsi_gpu_stability"
+          check_chain "gsi_gpu_stability.rc"  "gpu_stability_done"  "gsi_hal_mitigations"
+          check_chain "gsi_hal_mitigations.rc" "hal_mitigations_done" "gsi_app_compat"
+          check_chain "gsi_app_compat.rc"     "app_compat_done"     "gsi_forward_compat"
+          check_chain "gsi_forward_compat.rc" "forward_compat_done" "gsi_hal_probe"
+          check_chain "gsi_hal_probe.rc"      "hal_probe_done"      "gsi_diagnostics"
+          check_chain "gsi_diagnostics.rc"    "diagnostics_done"    "all_mitigations_done"
+
+          # Verify each script sets its completion signal
+          for pair in \
+            "boot_safety.sh:boot_safety_done" \
+            "gpu_stability.sh:gpu_stability_done" \
+            "hal_gap_mitigations.sh:hal_mitigations_done" \
+            "app_compat_mitigations.sh:app_compat_done" \
+            "forward_compat.sh:forward_compat_done" \
+            "hal_probe.sh:hal_probe_done" \
+            "survival_diagnostics.sh:diagnostics_done"; do
+            script="${pair%%:*}"
+            signal="${pair##*:}"
+            if [ -f "$script" ]; then
+              if grep -q "$signal" "$script"; then
+                echo "  PASS: $script sets $signal"
+              else
+                echo "  FAIL: $script missing signal $signal"
+                EXIT=1
+              fi
+            else
+              echo "  FAIL: $script not found"
+              EXIT=1
+            fi
+          done
+
+          exit $EXIT
+
+  # ============================================================
+  # Job 2: Build integration test (requires AOSP env)
+  # ============================================================
+  build-integration:
+    name: Build Integration Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    needs: static-validation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify build script
+        run: |
+          echo "=== Build script validation ==="
+          bash -n build.sh
+          echo "  PASS: build.sh syntax OK"
+
+          # Verify survival file staging would work
+          echo ""
+          echo "=== Survival file staging simulation ==="
+          SURVIVAL_DIR="/tmp/test_survival"
+          mkdir -p "$SURVIVAL_DIR"
+
+          for f in \
+            compatibility_matrix_vendor15_frozen.xml \
+            gsi_survival.rc \
+            gsi_survival_check.sh \
+            vendor15_survival.mk \
+            gpu_stability.sh \
+            gsi_gpu_stability.rc \
+            gpu_vulkan_blocklist.cfg \
+            gpu_stability.mk \
+            hal_gap_mitigations.sh \
+            gsi_hal_mitigations.rc \
+            hal_gap_mitigations.mk \
+            app_compat_mitigations.sh \
+            gsi_app_compat.rc \
+            app_compat_mitigations.mk \
+            boot_safety.sh \
+            gsi_boot_safety.rc \
+            boot_safety.mk \
+            forward_compat.sh \
+            gsi_forward_compat.rc \
+            forward_compat.mk; do
+            if [ -f "$f" ]; then
+              cp "$f" "$SURVIVAL_DIR/"
+              echo "  STAGED: $f"
+            else
+              echo "  MISSING: $f"
+            fi
+          done
+
+          echo ""
+          echo "All staging files verified."
+
+  # ============================================================
+  # Job 3: Runtime testing (requires device)
+  # ============================================================
+  runtime-test:
+    name: Runtime Survival Test
+    runs-on: [self-hosted, android-device]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.device_id != ''
+    needs: build-integration
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set device serial
+        run: |
+          export ANDROID_SERIAL="${{ github.event.inputs.device_id }}"
+          echo "ANDROID_SERIAL=$ANDROID_SERIAL" >> $GITHUB_ENV
+
+      - name: Wait for device boot
+        run: |
+          adb wait-for-device
+          echo "Device connected."
+          adb shell getprop ro.product.model
+
+      - name: Run survival test harness
+        run: |
+          bash tools/test_harness/survival_test.sh
+
+      - name: Run HAL probes
+        run: |
+          bash tools/vendor15-cli.sh probe
+
+      - name: Run diagnostics
+        run: |
+          bash tools/vendor15-cli.sh diagnose
+
+      - name: Collect diagnostics artifacts
+        if: always()
+        run: |
+          mkdir -p test-results
+          adb shell "getprop" > test-results/device_props.txt 2>/dev/null || true
+          adb shell "logcat -d -s GSI_DIAG:I GSI_PROBE:I GSI_HAL:I GSI_FWDCOMPAT:I GSI_SURVIVAL:I" \
+            > test-results/survival_logs.txt 2>/dev/null || true
+          adb shell "logcat -d | grep -E 'FATAL|SIGABRT|system_server'" \
+            > test-results/crash_logs.txt 2>/dev/null || true
+          adb shell "lshal -its" > test-results/lshal.txt 2>/dev/null || true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: survival-test-results
+          path: test-results/

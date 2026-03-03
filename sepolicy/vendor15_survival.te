@@ -1,0 +1,116 @@
+# ============================================================
+# vendor15_survival.te
+# Vendor15 Survival Mode — SELinux Policy Additions
+# ============================================================
+#
+# These type enforcement rules support the survival architecture.
+# They are needed ONLY when running in enforcing mode.
+# In permissive mode (common for survival builds), these prevent
+# excessive audit log spam but are not functionally required.
+#
+# Usage:
+#   Copy to system/sepolicy/private/vendor15_survival.te
+#   or include via BOARD_SEPOLICY_DIRS.
+#
+# IMPORTANT: These rules are designed to be as narrow as possible.
+# They do NOT grant blanket access — each rule addresses a specific
+# survival mode requirement.
+# ============================================================
+
+# -------------------------------------------------------
+# 1. Mapper Shim Library
+# -------------------------------------------------------
+# Allow libui to dlopen the mapper v5 shim from /system/lib64/hw/
+# The shim in turn dlopen's the vendor mapper from /vendor/lib64/hw/
+#
+# file_contexts entry required:
+#   /system/lib64/hw/mapper\.v5\.0-impl-shim\.so  u:object_r:same_process_hal_file:s0
+#
+# Uncomment if using the mapper shim:
+# allow hal_graphics_mapper system_file:file { read open execute map getattr };
+# allow hal_graphics_mapper vendor_file:file { read open execute map getattr };
+
+# -------------------------------------------------------
+# 2. Survival Scripts — /dev/kmsg Access
+# -------------------------------------------------------
+# All survival scripts write diagnostic messages to /dev/kmsg.
+# In enforcing mode, this requires explicit permission.
+#
+# Uncomment if running in enforcing mode:
+# allow su kmsg_device:chr_file { write open append };
+
+# -------------------------------------------------------
+# 3. Survival Scripts — Property Access
+# -------------------------------------------------------
+# Scripts use setprop to set sys.gsi.* and debug.* properties.
+# The su context already has broad property access on userdebug builds.
+# On user builds (unusual for GSI), these would be needed:
+#
+# allow su system_prop:property_service set;
+# allow su debug_prop:property_service set;
+
+# -------------------------------------------------------
+# 4. HAL Prober — ServiceManager Query
+# -------------------------------------------------------
+# The HAL prober uses `service check` to query service_manager.
+# This requires find permission on the service_manager.
+#
+# Uncomment if running in enforcing mode:
+# allow su servicemanager:service_manager { find list };
+# allow su hwservicemanager:hwservice_manager { find list };
+
+# -------------------------------------------------------
+# 5. Diagnostics — Logcat Read Access
+# -------------------------------------------------------
+# The diagnostics collector reads recent logcat entries.
+# This is required for the error counting functionality.
+#
+# Uncomment if running in enforcing mode:
+# allow su logd:unix_dgram_socket { sendto };
+# allow su logdr_socket:sock_file { write };
+
+# -------------------------------------------------------
+# 6. Init Script — Service Execution
+# -------------------------------------------------------
+# gsi_survival_gate and mitigation scripts run as su context.
+# They need to execute shell commands and access /data.
+#
+# These are typically already permitted in userdebug builds:
+# allow su shell_exec:file { execute execute_no_trans };
+# allow su system_data_file:dir { search read };
+# allow su system_data_file:file { read write create };
+
+# -------------------------------------------------------
+# 7. Vendor HAL Process — System Library Access
+# -------------------------------------------------------
+# If vendor HAL processes need to load system libraries
+# (e.g., VNDK snapshot from /system/lib64/vndk-35/),
+# they need access through the linker namespace.
+#
+# This is normally handled by linkerconfig but may need
+# explicit SELinux permission in some cases:
+#
+# allow hal_graphics_composer_default vndk_sp_file:file { read open execute map getattr };
+
+# ============================================================
+# NOTES
+# ============================================================
+#
+# 1. All rules above are COMMENTED OUT by default. Enable only
+#    the rules needed for your specific configuration.
+#
+# 2. For development, running `setenforce 0` (permissive) is
+#    simpler than managing these policies. These rules are for
+#    builds that need to stay in enforcing mode.
+#
+# 3. The survival architecture is inherently security-degraded.
+#    Adding SELinux exceptions is consistent with the overall
+#    design philosophy: bootability over security.
+#
+# 4. NEVER add `permissive su;` as a blanket rule. If you need
+#    permissive, use the kernel cmdline `androidboot.selinux=permissive`
+#    which affects all domains uniformly.
+#
+# 5. These rules target userdebug/eng builds. User builds would
+#    require significantly more policy work and are not the
+#    target for survival mode GSIs.

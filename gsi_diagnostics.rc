@@ -1,0 +1,14 @@
+# ============================================================
+# gsi_diagnostics.rc — SEVENTH (LAST) in chain
+# ============================================================
+
+service gsi_diagnostics /system/bin/sh /system/bin/survival_diagnostics.sh
+    user root
+    group root system
+    oneshot
+    disabled
+
+# Final link — all mitigations + probing + diagnostics complete
+on property:sys.gsi.diagnostics_done=1
+    write /dev/kmsg "GSI_DIAG: All GSI mitigations applied and validated."
+    setprop sys.gsi.all_mitigations_done 1

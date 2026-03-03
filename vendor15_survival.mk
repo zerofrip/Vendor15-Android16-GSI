@@ -70,3 +70,18 @@ include device/phh/treble/vendor15/boot_safety.mk
 # 9. Forward Compatibility — Android 17/18 proofing
 # -----------------------------------------------------------
 include device/phh/treble/vendor15/forward_compat.mk
+
+# -----------------------------------------------------------
+# 10. HAL Probing — runtime binder-level HAL liveness checks
+# -----------------------------------------------------------
+PRODUCT_COPY_FILES += \
+    device/phh/treble/vendor15/gsi_hal_probe.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/gsi_hal_probe.rc \
+    device/phh/treble/vendor15/hal_probe.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/hal_probe.sh
+
+# -----------------------------------------------------------
+# 11. Diagnostics — structured boot telemetry (logcat-only)
+# -----------------------------------------------------------
+PRODUCT_COPY_FILES += \
+    device/phh/treble/vendor15/gsi_diagnostics.rc:$(TARGET_COPY_OUT_SYSTEM)/etc/init/gsi_diagnostics.rc \
+    device/phh/treble/vendor15/survival_diagnostics.sh:$(TARGET_COPY_OUT_SYSTEM)/bin/survival_diagnostics.sh
+

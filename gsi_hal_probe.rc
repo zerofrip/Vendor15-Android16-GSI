@@ -1,0 +1,14 @@
+# ============================================================
+# gsi_hal_probe.rc — SIXTH in chain
+# ============================================================
+
+service gsi_hal_probe /system/bin/sh /system/bin/hal_probe.sh
+    user root
+    group root system
+    oneshot
+    disabled
+
+# Chain: hal_probe → diagnostics
+on property:sys.gsi.hal_probe_done=1
+    write /dev/kmsg "GSI_PROBE: HAL probing done. Starting diagnostics."
+    start gsi_diagnostics

@@ -23,6 +23,7 @@ to maximize boot reliability across diverse vendors:
 Vendor15-GSI/
 ├── build.sh                                 # Main build script
 ├── compatibility_matrix_vendor15_frozen.xml  # Frozen FCM (all HALs optional, AIDL-only)
+├── .gitignore
 │
 ├── # ── Survival Mode: Boot Gate ──
 ├── gsi_survival.rc                          # Init: upgrade-only boot gate
@@ -30,42 +31,49 @@ Vendor15-GSI/
 ├── vendor15_survival.mk                     # Master makefile (includes all .mk below)
 │
 ├── # ── Runtime Mitigation Scripts ──
-├── boot_safety.sh                           # Layer 1: fatal path neutralization (18 props)
-├── gsi_boot_safety.rc                       # Init: chain start → triggers gpu_stability
-├── boot_safety.mk                           # Build: boot safety defaults
-│
-├── gpu_stability.sh                         # Layer 2: GPU detection & fallback (31 props)
-├── gsi_gpu_stability.rc                     # Init: chained → triggers hal_mitigations
-├── gpu_stability.mk                         # Build: GPU defaults
-├── gpu_vulkan_blocklist.cfg                 # Vulkan extension blocklist (19 extensions)
-│
-├── hal_gap_mitigations.sh                   # Layer 3: HAL version gap mitigations (45 props)
-├── gsi_hal_mitigations.rc                   # Init: chained → triggers app_compat
-├── hal_gap_mitigations.mk                   # Build: HAL defaults
-│
-├── app_compat_mitigations.sh                # Layer 4: app-facing feature gating (43 props)
-├── gsi_app_compat.rc                        # Init: chained → triggers forward_compat
-├── app_compat_mitigations.mk                # Build: app compat defaults
-│
-├── forward_compat.sh                        # Layer 5: Android 17/18 proofing (40 props)
-├── gsi_forward_compat.rc                    # Init: chain end → sets all_mitigations_done
-├── forward_compat.mk                        # Build: forward compat defaults
+├── boot_safety.sh / .mk / gsi_boot_safety.rc
+├── gpu_stability.sh / .mk / gsi_gpu_stability.rc
+├── gpu_vulkan_blocklist.cfg                 # Vulkan extension blocklist
+├── hal_gap_mitigations.sh / .mk / gsi_hal_mitigations.rc
+├── app_compat_mitigations.sh / .mk / gsi_app_compat.rc
+├── forward_compat.sh / .mk / gsi_forward_compat.rc
+├── hal_probe.sh / gsi_hal_probe.rc          # Layer 6: runtime HAL liveness probing
+├── survival_diagnostics.sh / gsi_diagnostics.rc  # Layer 7: boot telemetry
 │
 ├── # ── Supporting Infrastructure ──
-├── .github/workflows/                       # CI (self-hosted runner)
-├── build/make/tools/vndk_compat/            # VNDK Compatibility Engine (Python)
+├── .github/workflows/
+│   ├── build_gsi.yml                        # CI: GSI build (self-hosted runner)
+│   └── survival_test.yml                    # CI: static + runtime validation
+├── build/make/
+│   ├── core/vndk_compat.mk
+│   └── tools/vndk_compat/                   # VNDK Compatibility Engine (Python)
+│       ├── vndk_compat_engine.py
+│       ├── vndk_diff_engine.py
+│       ├── analyze_dependencies.py
+│       ├── generate_linker_config.py
+│       ├── shim_generator.py
+│       └── ...                              # models/, policies/, etc.
 ├── docs/
 │   └── VENDOR15_LIFETIME_EXTENSION_ARCHITECTURE.md
-├── patches/                                 # AOSP + TrebleDroid patches
-│   ├── build/make/
-│   ├── device/phh/treble/
-│   ├── frameworks/base/
-│   └── system/core/
+├── patches/
+│   ├── build/make/                          # VNDK compat patch
+│   ├── device/phh/treble/                   # Survival + HIDL removal (5 patches)
+│   ├── frameworks/base/                     # VINTF bypass
+│   └── system/core/                         # Init VINTF bypass
 ├── scripts/
 │   ├── apply_patches.sh
 │   ├── validate_patches.sh
 │   ├── verify_aidl_only.sh
 │   └── verify_survival.sh
+├── sepolicy/
+│   └── vendor15_survival.te                 # SELinux policy for survival mode
+├── tools/
+│   ├── vendor15-cli.sh                      # Developer CLI (diagnose, probe, status...)
+│   ├── diagnostics/survival_diagnostics.sh
+│   ├── hal_prober/hal_probe.sh
+│   ├── matrix_optimizer/optimize_matrix.py
+│   ├── shim_generator/generate_mapper_shim.py
+│   └── test_harness/survival_test.sh
 └── trebledroid/                             # TrebleDroid submodules
     ├── device_phh_treble/
     ├── vendor_hardware_overlay/
@@ -74,7 +82,7 @@ Vendor15-GSI/
 
 ## Runtime Mitigation System
 
-The GSI ships **5 runtime mitigation scripts** that execute in a deterministic
+The GSI ships **7 runtime mitigation scripts** that execute in a deterministic
 chain during boot via `init` property triggers. Each script probes vendor
 capabilities at runtime and sets conservative system properties.
 
@@ -87,10 +95,12 @@ post-fs-data
             └─ hal_mitigations (45 props)
                  └─ app_compat (43 props)
                       └─ forward_compat (40 props)
-                           └─ sys.gsi.all_mitigations_done=1
+                           └─ hal_probe (16 HALs probed, reactive fallbacks)
+                                └─ diagnostics (structured JSON telemetry)
+                                     └─ sys.gsi.all_mitigations_done=1
 ```
 
-**Total: ~177 runtime property adjustments + 43 build-time defaults**
+**Total: ~177 runtime property adjustments + 16 HAL probes + 43 build-time defaults**
 
 ### Mitigation Layers
 
@@ -226,10 +236,13 @@ adb shell getenforce
 
 ## Patches
 
-| Directory | Purpose |
-|-----------|---------|
-| `build/make/` | VNDK compat framework integration |
-| `device/phh/treble/` (0001) | Survival mode inclusion in base.mk |
-| `device/phh/treble/` (0002–0005) | HIDL removal for AIDL-only compliance |
-| `frameworks/base/` | VINTF enforcement bypass in VintfObject |
-| `system/core/` | Init-level VINTF check bypass |
+| # | Path | Patch | Purpose |
+|---|------|-------|---------|
+| 1 | `build/make/` | `0001-Integrate-VNDK-compatibility-framework` | VNDK compat engine integration |
+| 2 | `device/phh/treble/` | `0001-Include-vendor15-survival-mode` | Survival mode inclusion in base.mk |
+| 3 | `device/phh/treble/` | `0002-Remove-HIDL-fingerprint-from-framework-manifest` | HIDL fingerprint v2.1 removal |
+| 4 | `device/phh/treble/` | `0003-Remove-HIDL-audio-from-bluetooth-manifest` | HIDL audio @2.0–7.1 removal |
+| 5 | `device/phh/treble/` | `0004-Remove-HIDL-libraries-from-interfaces` | HIDL library registrations removal |
+| 6 | `device/phh/treble/` | `0005-Remove-HIDL-packages-from-base-mk` | HIDL packages + Oppo compat removal |
+| 7 | `frameworks/base/` | `0001-Allow-mismatched-vendor` | VINTF enforcement bypass in VintfObject |
+| 8 | `system/core/` | `0001-Disable-VINTF-check-for-GSI` | Init-level VINTF check bypass |

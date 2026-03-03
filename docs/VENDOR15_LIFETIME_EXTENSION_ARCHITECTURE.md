@@ -492,399 +492,43 @@ Strategy: Preserve metadata format
 
 This is the **most critical file** in the entire survival architecture. It tells the framework exactly what to expect from the vendor.
 
-```xml
-<compatibility-matrix version="1.0" type="framework" level="202404">
-    <!-- Graphics: Accept Vendor15's composer3 v3 -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.graphics.composer3</name>
-        <version>3-4</version>
-        <interface>
-            <name>IComposer</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
+The full matrix is maintained as [`compatibility_matrix_vendor15_frozen.xml`](file:///home/zerof/github/Vendor15-GSI/compatibility_matrix_vendor15_frozen.xml) in the repository root. Key design principles:
 
-    <!-- Graphics: Accept Vendor15's allocator v1 -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.graphics.allocator</name>
-        <version>1-2</version>
-        <interface>
-            <name>IAllocator</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
+- **All HALs marked `optional="true"`** — no HAL can block boot
+- **Version ranges widened** to accept Vendor15's older versions (e.g. composer3 `3-4`, power `4-6`)
+- **AIDL-only** — no HIDL HAL entries
+- **Non-phone HALs removed** (automotive, broadcastradio, contexthub, tv, etc.)
+- **FCM level frozen at `202404`** (Vendor15 era)
 
-    <!-- Power: Accept Vendor15's v4, make optional -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.power</name>
-        <version>4-6</version>
-        <interface>
-            <name>IPower</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
+### 6.2 Build Properties
 
-    <!-- Audio: Accept Vendor15's v1-2 -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.audio.core</name>
-        <version>1-4</version>
-        <interface>
-            <name>IModule</name>
-            <instance>default</instance>
-        </interface>
-        <interface>
-            <name>IConfig</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
+System properties are set across multiple files rather than a single `system.prop`:
 
-    <!-- Camera: Keep wide version range -->
-    <hal format="aidl" optional="true" updatable-via-apex="true">
-        <name>android.hardware.camera.provider</name>
-        <version>1-3</version>
-        <interface>
-            <name>ICameraProvider</name>
-            <regex-instance>[^/]+/[0-9]+</regex-instance>
-        </interface>
-    </hal>
+- **Build-time defaults**: Each `.mk` file (`boot_safety.mk`, `gpu_stability.mk`, `hal_gap_mitigations.mk`, `app_compat_mitigations.mk`, `forward_compat.mk`) sets `PRODUCT_SYSTEM_DEFAULT_PROPERTIES`
+- **Runtime overrides**: Each `.sh` script probes vendor capabilities and calls `setprop` to adjust properties at boot
+- **Master makefile**: [`vendor15_survival.mk`](file:///home/zerof/github/Vendor15-GSI/vendor15_survival.mk) sets core survival properties (`ro.gsi.compat.vendor_level=15`, `ro.gsi.compat.survival_mode=true`, `persist.sys.disable_rescue=true`) and includes all sub-makefiles
 
-    <!-- WiFi: Accept Vendor15's v1-2 -->
-    <hal format="aidl" optional="true" updatable-via-apex="true">
-        <name>android.hardware.wifi</name>
-        <version>1-4</version>
-        <interface>
-            <name>IWifi</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- WiFi Supplicant: Accept Vendor15's v2-3 -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.wifi.supplicant</name>
-        <version>2-5</version>
-        <interface>
-            <name>ISupplicant</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- Radio: Accept Vendor15's v2-3 -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.radio.config</name>
-        <version>2-5</version>
-        <interface>
-            <name>IRadioConfig</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <hal format="aidl" optional="true">
-        <name>android.hardware.radio.data</name>
-        <version>2-5</version>
-        <interface>
-            <name>IRadioData</name>
-            <instance>slot1</instance>
-            <instance>slot2</instance>
-        </interface>
-    </hal>
-
-    <hal format="aidl" optional="true">
-        <name>android.hardware.radio.network</name>
-        <version>2-5</version>
-        <interface>
-            <name>IRadioNetwork</name>
-            <instance>slot1</instance>
-            <instance>slot2</instance>
-        </interface>
-    </hal>
-
-    <hal format="aidl" optional="true">
-        <name>android.hardware.radio.modem</name>
-        <version>2-5</version>
-        <interface>
-            <name>IRadioModem</name>
-            <instance>slot1</instance>
-            <instance>slot2</instance>
-        </interface>
-    </hal>
-
-    <hal format="aidl" optional="true">
-        <name>android.hardware.radio.sim</name>
-        <version>2-5</version>
-        <interface>
-            <name>IRadioSim</name>
-            <instance>slot1</instance>
-            <instance>slot2</instance>
-        </interface>
-    </hal>
-
-    <hal format="aidl" optional="true">
-        <name>android.hardware.radio.voice</name>
-        <version>2-5</version>
-        <interface>
-            <name>IRadioVoice</name>
-            <instance>slot1</instance>
-            <instance>slot2</instance>
-        </interface>
-    </hal>
-
-    <hal format="aidl" optional="true">
-        <name>android.hardware.radio.messaging</name>
-        <version>2-5</version>
-        <interface>
-            <name>IRadioMessaging</name>
-            <instance>slot1</instance>
-            <instance>slot2</instance>
-        </interface>
-    </hal>
-
-    <!-- KeyMint: Accept Vendor15's version -->
-    <hal format="aidl" optional="true" updatable-via-apex="true">
-        <name>android.hardware.security.keymint</name>
-        <version>1-4</version>
-        <interface>
-            <name>IKeyMintDevice</name>
-            <instance>default</instance>
-            <instance>strongbox</instance>
-        </interface>
-    </hal>
-
-    <!-- Health: Accept Vendor15's v2-3 -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.health</name>
-        <version>2-4</version>
-        <interface>
-            <name>IHealth</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- Sensors: Accept Vendor15's version -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.sensors</name>
-        <version>1-3</version>
-        <interface>
-            <name>ISensors</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- Bluetooth: Keep as-is, generally stable -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.bluetooth</name>
-        <interface>
-            <name>IBluetoothHci</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- Gatekeeper -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.gatekeeper</name>
-        <version>1</version>
-        <interface>
-            <name>IGatekeeper</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- Boot control -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.boot</name>
-        <interface>
-            <name>IBootControl</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- Vibrator: Accept v1-2 -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.vibrator</name>
-        <version>1-4</version>
-        <interface>
-            <name>IVibrator</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- Thermal: Accept v2 -->
-    <hal format="aidl" optional="true">
-        <name>android.hardware.thermal</name>
-        <version>2-3</version>
-        <interface>
-            <name>IThermal</name>
-            <instance>default</instance>
-        </interface>
-    </hal>
-
-    <!-- DRM: Accept v1 -->
-    <hal format="aidl" optional="true" updatable-via-apex="true">
-        <name>android.hardware.drm</name>
-        <version>1-2</version>
-        <interface>
-            <name>IDrmFactory</name>
-            <regex-instance>.*</regex-instance>
-        </interface>
-    </hal>
-
-    <!-- Mapper: Accept v4-5 native -->
-    <hal format="native" optional="true">
-        <name>mapper</name>
-        <version>4.0-5.0</version>
-        <interface>
-            <regex-instance>.*</regex-instance>
-        </interface>
-    </hal>
-
-    <!-- REMOVE these HALs entirely (not present on most Vendor15 phone devices):
-         - automotive.*
-         - broadcastradio
-         - contexthub
-         - tv.*
-         - bluetooth.ranging
-         - bluetooth.socket
-         - bluetooth.finder
-         - bluetooth.lmp_event
-         - bluetooth.gatt (new in A17)
-         - security.see.*
-         - virtualization.capabilities
-    -->
-</compatibility-matrix>
-```
-
-### 6.2 Build Properties (system.prop / system_ext.prop)
-
-```properties
-# ============================================================
-# Vendor15 Compatibility Lifetime Extension - System Properties
-# ============================================================
-
-# ----- Identity & Version Spoofing -----
-# Keep the device reporting Vendor15's API level for vendor compatibility
-ro.product.first_api_level=35
-ro.board.first_api_level=35
-
-# ----- VINTF Bypass -----
-# Force VINTF to report compatibility even with mismatched vendor
-ro.vintf.enabled=false
-ro.boot.vintf_override_level=202404
-
-# ----- Graphics Survival -----
-# Force GPU composition, bypass HWC for methods that don't exist
-debug.sf.hw=0
-debug.sf.gpu_comp_tiling=1
-debug.sf.enable_hwc_vds=0
-debug.hwc.force_gpu_comp=1
-# Reduce SurfaceFlinger expectations
-debug.sf.latch_unsignaled=1
-debug.sf.disable_backpressure=1
-
-# ----- Power Management Degradation -----
-ro.power.hint_session.enabled=false
-ro.surface_flinger.use_power_hint_session=false
-
-# ----- NNAPI / ML -----
-debug.nn.cpuonly=1
-
-# ----- Security / Encryption Conservatism -----
-# Pin encryption to Vendor15-compatible algorithms
-ro.crypto.fbe_algorithm=aes-256-xts:aes-256-cts
-ro.crypto.volume.metadata.method=dm-default-key
-ro.crypto.allow_encrypt_override=false
-
-# ----- Rescue Party Bypass -----
-persist.sys.disable_rescue=true
-
-# ----- GSI Upgrade Tracking -----
-# Custom properties to track GSI version for upgrade-only enforcement
-ro.gsi.compat.vendor_level=15
-ro.gsi.compat.survival_mode=true
-
-# ----- SDK / Framework Checks -----
-persist.sys.gsi.skip_sdk_check=true
-```
+Total: ~177 runtime property adjustments + 16 HAL probes + 43 build-time defaults across the 7-layer mitigation chain.
 
 ### 6.3 Init.rc Safeguards
 
-**`/system/etc/init/gsi_survival.rc`** — Must be included in the GSI image:
+The init configuration is split across 8 `.rc` files, each staged to `/system/etc/init/` by `build.sh`:
+
+| File | Role |
+|------|------|
+| [`gsi_survival.rc`](file:///home/zerof/github/Vendor15-GSI/gsi_survival.rc) | Boot gate: SDK comparison, downgrade halt, upgrade cache wipe |
+| [`gsi_boot_safety.rc`](file:///home/zerof/github/Vendor15-GSI/gsi_boot_safety.rc) | Layer 1: starts `boot_safety.sh`, triggers GPU stability |
+| [`gsi_gpu_stability.rc`](file:///home/zerof/github/Vendor15-GSI/gsi_gpu_stability.rc) | Layer 2: starts `gpu_stability.sh`, triggers HAL mitigations |
+| [`gsi_hal_mitigations.rc`](file:///home/zerof/github/Vendor15-GSI/gsi_hal_mitigations.rc) | Layer 3: starts `hal_gap_mitigations.sh`, triggers app compat |
+| [`gsi_app_compat.rc`](file:///home/zerof/github/Vendor15-GSI/gsi_app_compat.rc) | Layer 4: starts `app_compat_mitigations.sh`, triggers forward compat |
+| [`gsi_forward_compat.rc`](file:///home/zerof/github/Vendor15-GSI/gsi_forward_compat.rc) | Layer 5: starts `forward_compat.sh`, triggers HAL probing |
+| [`gsi_hal_probe.rc`](file:///home/zerof/github/Vendor15-GSI/gsi_hal_probe.rc) | Layer 6: starts `hal_probe.sh`, triggers diagnostics |
+| [`gsi_diagnostics.rc`](file:///home/zerof/github/Vendor15-GSI/gsi_diagnostics.rc) | Layer 7: starts `survival_diagnostics.sh`, sets `sys.gsi.all_mitigations_done=1` |
 
 > [!NOTE]
-> The actual implementation uses **property-based SDK tracking** (`persist.sys.prev_sdk`)
-> rather than the file-based approach (`/data/system/.gsi_last_sdk_version`) originally
-> proposed. This is more robust because Android's property system handles persistence
-> atomically and survives partial boots where file writes might not complete.
-
-```rc
-# ============================================================
-# gsi_survival.rc
-# Vendor15 Compatibility Lifetime Extension — Init Configuration
-# ============================================================
-#
-# Flow:
-#   1. post-fs-data: run gsi_survival_check.sh (SDK comparison)
-#   2. Script sets sys.gsi.boot_decision property
-#   3. Init reacts:
-#      - "downgrade"  → halt boot, log fatal, reboot to recovery
-#      - "upgrade"    → continue boot (caches already wiped by script)
-#      - "normal"     → continue boot
-#      - "first_boot" → continue boot
-#
-# Properties used:
-#   persist.sys.prev_sdk       — high-water-mark of last booted SDK
-#   persist.sys.gsi_upgrade    — "1" during the single upgrade boot
-#   sys.gsi.boot_decision      — set by script, consumed by triggers
-# ============================================================
-
-# Service: gsi_survival_gate
-# Runs the upgrade/downgrade check after /data is mounted.
-service gsi_survival_gate /system/bin/sh /system/bin/gsi_survival_check.sh
-    class core
-    user root
-    group root system
-    oneshot
-    disabled
-    seclabel u:r:su:s0
-
-on post-fs-data
-    start gsi_survival_gate
-
-# DOWNGRADE DETECTED — halt boot
-on property:sys.gsi.boot_decision=downgrade
-    write /dev/kmsg "GSI_SURVIVAL: FATAL: DOWNGRADE DETECTED"
-    write /dev/kmsg "GSI_SURVIVAL: Flash SDK >= persist.sys.prev_sdk or wipe data."
-    class_stop main
-    class_stop late_start
-    class_stop hal
-    exec -- /system/bin/sleep 2
-    setprop sys.powerctl reboot,recovery
-
-# UPGRADE DETECTED
-on property:sys.gsi.boot_decision=upgrade
-    write /dev/kmsg "GSI_SURVIVAL: Upgrade boot in progress. Caches cleared."
-
-# NORMAL BOOT
-on property:sys.gsi.boot_decision=normal
-    write /dev/kmsg "GSI_SURVIVAL: Normal boot. No version change detected."
-
-# FIRST BOOT
-on property:sys.gsi.boot_decision=first_boot
-    write /dev/kmsg "GSI_SURVIVAL: First boot detected. SDK baseline recorded."
-
-# Finalize upgrade flag on boot completion
-on property:sys.boot_completed=1
-    exec -- /system/bin/sh -c "\
-        if [ \"$(getprop persist.sys.gsi_upgrade)\" = \"1\" ]; then \
-            setprop persist.sys.gsi_upgrade 0; \
-            log -t GSI_SURVIVAL -p i 'Upgrade boot completed.'; \
-        fi"
-    write /dev/kmsg "GSI_SURVIVAL: === Boot Complete ==="
-
-# VINTF bypass properties (early-init)
-on early-init
-    setprop ro.vintf.enforce false
-    setprop persist.sys.disable_rescue true
-    write /dev/kmsg "GSI_SURVIVAL: Survival mode active (early-init)"
-```
+> The implementation uses **property-based SDK tracking** (`persist.sys.prev_sdk`)
+> rather than file-based tracking. This is more robust because Android's property
+> system handles persistence atomically and survives partial boots.
 
 ### 6.4 Must-Have Items That Will Otherwise Cause Bootloops
 
@@ -909,7 +553,7 @@ The following has been implemented and integrated into the build:
 
 #### 6.5.1 Chained Execution Architecture
 
-5 runtime scripts execute in deterministic order via `init` property triggers.
+7 runtime scripts execute in deterministic order via `init` property triggers.
 This eliminates race conditions between scripts that set overlapping properties.
 
 ```
@@ -919,7 +563,9 @@ post-fs-data
             └─ hal_gap_mitigations.sh (45 props)
                  └─ app_compat_mitigations.sh (43 props)
                       └─ forward_compat.sh (40 props)
-                           └─ sys.gsi.all_mitigations_done=1
+                           └─ hal_probe.sh (16 HALs probed, reactive fallbacks)
+                                └─ survival_diagnostics.sh (structured JSON telemetry)
+                                     └─ sys.gsi.all_mitigations_done=1
 ```
 
 Each `.rc` file starts its service only when the previous script sets its completion property.
@@ -933,6 +579,8 @@ Each `.rc` file starts its service only when the previous script sets its comple
 | 3. HAL Gaps | `hal_gap_mitigations.sh` | 45 | HWC composer, Power ADPF, WiFi 6E/7, Audio spatial, Camera v4, Biometrics v5, Radio VoNR |
 | 4. App Compat | `app_compat_mitigations.sh` | 43 | Camera LIMITED, BT LE Audio→A2DP, NNAPI CPU-only, biometric PIN fallback |
 | 5. Forward Compat | `forward_compat.sh` | 40 | AIDL version probing, Health/KeyMint gating, AVF/pVM disable, A18 compositor |
+| 6. HAL Probe | `hal_probe.sh` | 16 probes | Binder liveness for 16 HALs, 2s timeout, caching, reactive fallbacks (GPU comp, power hints) |
+| 7. Diagnostics | `survival_diagnostics.sh` | — | Structured JSON-line telemetry: boot timing, chain status, process health, GPU, SELinux |
 
 #### 6.5.3 Bluetooth LOG(FATAL) Neutralization
 
@@ -941,7 +589,7 @@ These killed the BT audio service when vendors sent unexpected codec types (Sams
 
 #### 6.5.4 Build Integration
 
-`vendor15_survival.mk` includes all 9 makefiles in order:
+`vendor15_survival.mk` includes all 11 sections in order:
 
 ```makefile
 # 1. Survival mode base
@@ -953,6 +601,8 @@ These killed the BT audio service when vendors sent unexpected codec types (Sams
 # 7. App compatibility
 # 8. Boot safety
 # 9. Forward compatibility
+# 10. HAL probing (runtime binder checks)
+# 11. Diagnostics (structured boot telemetry)
 ```
 
 `build.sh` stages all files to the TrebleDroid survival directory.
@@ -1075,15 +725,18 @@ PRODUCT_COPY_FILES += \
 
 ## Appendix B: Patch Application Order
 
-Patches must be applied in this order to avoid conflicts:
+The 8 patches in `patches/` are applied by `scripts/apply_patches.sh` in directory order:
 
-1. `system/core` — VINTF bypass in init (foundation)
-2. `system/libvintf` — Compatibility check bypass
-3. `frameworks/native` — SurfaceFlinger/HWC tolerance
-4. `frameworks/base` — VintfObject + system_server resilience
-5. `build/make` — Build system integration + frozen FCM
-6. `hardware/interfaces` — Frozen compatibility matrix installation
-7. `system/security` — Keystore conservative mode
+| # | Path | Patch | Purpose |
+|---|------|-------|---------|
+| 1 | `build/make/` | `0001-Integrate-VNDK-compatibility-framework.patch` | VNDK compat engine integration |
+| 2 | `device/phh/treble/` | `0001-Include-vendor15-survival-mode.patch` | Include `vendor15_survival.mk` in base.mk |
+| 3 | `device/phh/treble/` | `0002-Remove-HIDL-fingerprint-from-framework-manifest.patch` | Remove HIDL fingerprint v2.1 |
+| 4 | `device/phh/treble/` | `0003-Remove-HIDL-audio-from-bluetooth-manifest.patch` | Remove HIDL audio @2.0–7.1 |
+| 5 | `device/phh/treble/` | `0004-Remove-HIDL-libraries-from-interfaces.patch` | Remove HIDL library registrations |
+| 6 | `device/phh/treble/` | `0005-Remove-HIDL-packages-from-base-mk.patch` | Remove HIDL packages + Oppo compat |
+| 7 | `frameworks/base/` | `0001-Allow-mismatched-vendor.patch` | VintfObject compatibility bypass |
+| 8 | `system/core/` | `0001-Disable-VINTF-check-for-GSI.patch` | Init-level VINTF check bypass |
 
 ## Appendix C: Diagnostic Commands
 
@@ -1117,11 +770,11 @@ adb shell "getprop sys.gsi.downgrade_detected"
 # Check SDK versions
 adb shell "getprop ro.build.version.sdk"
 adb shell "getprop ro.product.first_api_level"
-adb shell "cat /data/system/.gsi_last_sdk_version"
+adb shell "getprop persist.sys.prev_sdk"
 ```
 
 ---
 
-*Document version: 2.0*  
-*Last updated: 2026-03-02*  
+*Document version: 3.0*  
+*Last updated: 2026-03-03*  
 *Applicable to: Vendor15 (Android 15, FCM 202404) + Android 16–18 GSIs*
